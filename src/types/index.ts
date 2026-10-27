@@ -1,5 +1,7 @@
 export type IslandState = 'compact' | 'expanded' | 'notification';
 
+export type ExpandTrigger = 'hover' | 'click';
+
 export interface AppNotification {
   id: string;
   appId: string;
@@ -41,6 +43,7 @@ export interface CalendarEvent {
 export interface UserSettings {
   autostartEnabled: boolean;
   alwaysOnTopEnabled: boolean;
+  expandTrigger: ExpandTrigger;
   targetMonitor: string;
   weatherLocation: {
     name: string;
@@ -53,6 +56,8 @@ export interface UserSettings {
   hideNotificationContent: boolean;
   notificationDisplayDuration: number; // in seconds
   reducedMotionEnabled: boolean;
+  backgroundOpacity: number; // in % (20 to 100)
+  backgroundBlur: number; // in px (0 to 40)
 }
 
 export interface AudioPlaybackState {
@@ -61,4 +66,5 @@ export interface AudioPlaybackState {
   isPlaying: boolean;
   progress: number; // 0 to 1
   duration: number; // in seconds
+  sourceApp?: string; // e.g. 'spotify', 'youtube', 'apple', 'soundcloud', etc.
 }

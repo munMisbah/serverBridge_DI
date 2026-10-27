@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { IslandProvider, useIsland } from './context/IslandContext';
 import { IslandRoot } from './components/Island/IslandRoot';
 import { MessageSquare, Bell, Image as ImageIcon } from 'lucide-react';
@@ -8,21 +8,21 @@ const IslandControllerBar: React.FC<{
   showBackdrop: boolean;
   setShowBackdrop: (v: boolean | ((prev: boolean) => boolean)) => void;
 }> = ({ isTauri, showBackdrop, setShowBackdrop }) => {
-  const { setState, pushNotification } = useIsland();
-
+  const { setState, pushNotification, setAudioPlayback } = useIsland();
   // If running in native Tauri desktop mode, hide the web simulator controls
   if (isTauri) return null;
 
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-neutral-900/90 backdrop-blur-md px-4 py-2 rounded-2xl border border-white/10 shadow-2xl z-40 text-xs text-white">
-      <span className="text-[11px] font-semibold text-neutral-400 uppercase tracking-wider mr-1">
-        Simulator Bar:
+    <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1.5 rounded-2xl border border-white/[0.08] bg-[#09090b]/90 px-3 py-2 text-[11px] text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+      <span className="mr-1 flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+        Preview
       </span>
 
       <button
         type="button"
         onClick={() => setState('compact')}
-        className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-colors"
+        className="rounded-lg bg-white/[0.05] px-2.5 py-1 text-neutral-300 transition-colors hover:bg-white/[0.09] hover:text-white"
       >
         Compact
       </button>
@@ -30,7 +30,7 @@ const IslandControllerBar: React.FC<{
       <button
         type="button"
         onClick={() => setState('expanded')}
-        className="px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-200 transition-colors"
+        className="rounded-lg bg-white/[0.05] px-2.5 py-1 text-neutral-300 transition-colors hover:bg-white/[0.09] hover:text-white"
       >
         Expanded
       </button>
@@ -45,10 +45,10 @@ const IslandControllerBar: React.FC<{
             body: 'Halo! Widget Dynamic Island di Windows 11 ini animasinya responsif banget.',
           })
         }
-        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-600/30 hover:bg-emerald-600/40 text-emerald-300 border border-emerald-500/30 transition-colors"
+        className="flex items-center gap-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-emerald-300 transition-colors hover:bg-emerald-500/15"
       >
-        <MessageSquare className="w-3.5 h-3.5" />
-        <span>WhatsApp Test</span>
+        <MessageSquare className="h-3 w-3" />
+        <span>WhatsApp</span>
       </button>
 
       <button
@@ -61,21 +61,82 @@ const IslandControllerBar: React.FC<{
             body: 'No threats detected. Windows is fully protected.',
           })
         }
-        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-sky-600/30 hover:bg-sky-600/40 text-sky-300 border border-sky-500/30 transition-colors"
+        className="flex items-center gap-1 rounded-lg border border-sky-500/20 bg-sky-500/10 px-2.5 py-1 text-sky-300 transition-colors hover:bg-sky-500/15"
       >
-        <Bell className="w-3.5 h-3.5" />
-        <span>System Test</span>
+        <Bell className="h-3 w-3" />
+        <span>System</span>
       </button>
 
-      <div className="w-[1px] h-4 bg-white/10 mx-1" />
+      <div className="mx-0.5 h-4 w-px bg-white/[0.08]" />
 
       <button
         type="button"
+        onClick={() => {
+          setAudioPlayback({
+            title: 'Starboy',
+            artist: 'The Weeknd, Daft Punk',
+            isPlaying: true,
+            progress: 0.42,
+            duration: 230,
+            sourceApp: 'spotify',
+          });
+          setState('expanded');
+        }}
+        className="flex items-center gap-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2 py-1 text-emerald-400 transition-colors hover:bg-emerald-500/15"
+        title="Simulasikan lagu dari Spotify"
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+        <span>Spotify</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          setAudioPlayback({
+            title: 'Golden Hour',
+            artist: 'JVKE',
+            isPlaying: true,
+            progress: 0.55,
+            duration: 209,
+            sourceApp: 'youtube',
+          });
+          setState('expanded');
+        }}
+        className="flex items-center gap-1 rounded-lg border border-red-500/20 bg-red-500/10 px-2 py-1 text-red-400 transition-colors hover:bg-red-500/15"
+        title="Simulasikan lagu dari YouTube"
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-red-400" />
+        <span>YouTube</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          setAudioPlayback({
+            title: 'Anti-Hero',
+            artist: 'Taylor Swift',
+            isPlaying: true,
+            progress: 0.28,
+            duration: 200,
+            sourceApp: 'apple',
+          });
+          setState('expanded');
+        }}
+        className="flex items-center gap-1 rounded-lg border border-rose-500/20 bg-rose-500/10 px-2 py-1 text-rose-400 transition-colors hover:bg-rose-500/15"
+        title="Simulasikan lagu dari Apple Music"
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-rose-400" />
+        <span>Apple Music</span>
+      </button>
+
+      <div className="mx-0.5 h-4 w-px bg-white/[0.08]" />
+      <button
+        type="button"
         onClick={() => setShowBackdrop((v: boolean) => !v)}
-        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-neutral-800 hover:bg-neutral-700 text-neutral-300 transition-colors"
+        className="flex items-center gap-1 rounded-lg bg-white/[0.05] px-2.5 py-1 text-neutral-400 transition-colors hover:bg-white/[0.09] hover:text-white"
         title="Toggle Windows 11 wallpaper simulator backdrop"
       >
-        <ImageIcon className="w-3.5 h-3.5" />
+        <ImageIcon className="h-3 w-3" />
         <span>{showBackdrop ? 'Hide Wallpaper' : 'Show Wallpaper'}</span>
       </button>
     </div>
@@ -83,18 +144,11 @@ const IslandControllerBar: React.FC<{
 };
 
 export const AppContent: React.FC = () => {
-  const [isTauri, setIsTauri] = useState(false);
-  const [showBackdrop, setShowBackdrop] = useState(false);
-
-  useEffect(() => {
-    // Detect if running inside Tauri window
-    const inTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-    setIsTauri(inTauri);
-    // In browser preview, show wallpaper by default for authentic preview
-    if (!inTauri) {
-      setShowBackdrop(true);
-    }
-  }, []);
+  const [isTauri] = useState(
+    () => typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
+  );
+  // In browser preview, show the wallpaper by default for an authentic preview.
+  const [showBackdrop, setShowBackdrop] = useState(() => !isTauri);
 
   return (
     <div

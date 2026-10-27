@@ -1,4 +1,5 @@
 pub mod clipboard;
+pub mod hittest;
 pub mod media;
 pub mod notifications;
 pub mod settings;
@@ -52,8 +53,7 @@ pub fn run() {
                 }
 
                 let _ = main_window.show();
-                let _ = main_window.set_focus();
-                log_step("Called main_window.show() and set_focus().");
+                log_step("Called main_window.show().");
             } else {
                 log_step("ERROR: Main window 'main' not found in app setup!");
             }
@@ -100,15 +100,20 @@ pub fn run() {
             // Keep tray icon alive in app state
             app.manage(TrayKeeper(tray_holder));
 
-            // 3. Start Windows Notification Listener gracefully
+            // 3. Fixed-size window + native click-through hit testing
+            app.manage(hittest::HitTestState::default());
+            hittest::start_hit_test_loop(app.handle().clone());
+            log_step("Native hit-test loop started.");
+
+            // 4. Start Windows Notification Listener gracefully
             log_step("Starting notification listener...");
             let _ = notifications::start_notification_listener(app.handle().clone());
             log_step("Notification listener call completed.");
-            // 4. Start Windows Live Media Listener
+            // 5. Start Windows Live Media Listener
             log_step("Starting live media listener...");
             media::start_media_listener(app.handle().clone());
             log_step("Live media listener call completed.");
-            // 5. Start Windows Live Clipboard Listener
+            // 6. Start Windows Live Clipboard Listener
             log_step("Starting live clipboard listener...");
             clipboard::start_clipboard_listener(app.handle().clone());
             log_step("Live clipboard listener call completed.");
@@ -117,8 +122,8 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            window::resize_island_window,
             window::set_always_on_top,
+            hittest::set_island_hit_rect,
             notifications::check_notification_permission,
             notifications::request_notification_permission,
             notifications::start_notification_listener,

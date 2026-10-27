@@ -9,6 +9,8 @@ pub struct LiveMediaState {
     pub is_playing: bool,
     pub progress: f64,
     pub duration: f64,
+    #[serde(default)]
+    pub source_app: Option<String>,
 }
 
 #[tauri::command]
@@ -57,6 +59,10 @@ pub fn start_media_listener(app: AppHandle) {
                                 }
                             }
 
+                            let mut source_app = String::new();
+                            if let Ok(app_id) = session.SourceAppUserModelId() {
+                                source_app = app_id.to_string();
+                            }
                             let mut progress = 0.0;
                             let mut duration = 0.0;
 
@@ -83,6 +89,7 @@ pub fn start_media_listener(app: AppHandle) {
                                         is_playing,
                                         progress,
                                         duration,
+                                        source_app: if source_app.is_empty() { None } else { Some(source_app) },
                                     };
                                     let _ = app_handle.emit("windows-media-change", payload);
                                 }
@@ -98,6 +105,7 @@ pub fn start_media_listener(app: AppHandle) {
                                         is_playing: false,
                                         progress: 0.0,
                                         duration: 0.0,
+                                        source_app: None,
                                     },
                                 );
                             }

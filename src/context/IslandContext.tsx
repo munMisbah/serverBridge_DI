@@ -35,6 +35,7 @@ interface IslandContextType {
 const DEFAULT_SETTINGS: UserSettings = {
   autostartEnabled: true,
   alwaysOnTopEnabled: true,
+  expandTrigger: 'hover',
   targetMonitor: 'primary',
   weatherLocation: {
     name: 'Jakarta, Indonesia',
@@ -47,8 +48,9 @@ const DEFAULT_SETTINGS: UserSettings = {
   hideNotificationContent: false,
   notificationDisplayDuration: 5, // 5 seconds
   reducedMotionEnabled: false,
+  backgroundOpacity: 80,
+  backgroundBlur: 20,
 };
-
 const DEFAULT_EVENTS: CalendarEvent[] = [
   {
     id: 'evt-1',
@@ -106,6 +108,15 @@ const INITIAL_NOTIFICATIONS: AppNotification[] = [
   },
 ];
 
+const DEFAULT_AUDIO_PLAYBACK: AudioPlaybackState = {
+  title: 'Starboy',
+  artist: 'The Weeknd, Daft Punk',
+  isPlaying: true,
+  progress: 0.38,
+  duration: 230,
+  sourceApp: 'spotify',
+};
+
 const IslandContext = createContext<IslandContextType | undefined>(undefined);
 
 export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -139,8 +150,7 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   });
   const [activeTab, setActiveTab] = useState<'all' | 'weather' | 'calendar' | 'notifications' | 'settings'>('all');
-  const [audioPlayback, setAudioPlayback] = useState<AudioPlaybackState | null>(null);
-
+  const [audioPlayback, setAudioPlayback] = useState<AudioPlaybackState | null>(DEFAULT_AUDIO_PLAYBACK);
   const dismissTimerRef = useRef<number | undefined>(undefined);
 
   // Save settings to local storage
@@ -335,6 +345,7 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           is_playing: boolean;
           progress: number;
           duration: number;
+          source_app?: string;
         }>('windows-media-change', (event) => {
           const p = event.payload;
           if (p.is_playing && p.title) {
@@ -344,10 +355,11 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
               isPlaying: p.is_playing,
               progress: p.progress,
               duration: p.duration,
+              sourceApp: p.source_app,
             });
           } else if (!p.is_playing && p.title) {
             setAudioPlayback((prev) =>
-              prev ? { ...prev, isPlaying: false, title: p.title, artist: p.artist } : null
+              prev ? { ...prev, isPlaying: false, title: p.title, artist: p.artist, sourceApp: p.source_app ?? prev.sourceApp } : null
             );
           } else {
             setAudioPlayback(null);

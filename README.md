@@ -7,7 +7,7 @@ Aplikasi desktop native yang menghadirkan pengalaman **Dynamic Island** terinspi
 
 File binary **`.exe` mandiri (standalone)** telah berhasil dikompilasi langsung di workspace ini:
 ```
-Dynamic-Island-Windows-x64.exe  (Ukuran: ~9.1 MB, Native 64-bit Windows GUI)
+Dynamic-Island-Windows-x64.exe  (Ukuran: ~9.4 MB, Native 64-bit Windows GUI)
 ```
 Anda tinggal menyalin/mengunduh file ini ke laptop/PC Windows 11 Anda, lalu double-click untuk langsung menjalankannya tanpa perlu menginstal Node, Rust, ataupun C++!
 
@@ -17,20 +17,20 @@ Anda tinggal menyalin/mengunduh file ini ke laptop/PC Windows 11 Anda, lalu doub
 ### 1. Floating Island Window (Native Desktop)
 - **Posisi Otomatis:** Berada tepat di tengah horizontal bagian atas layar (12px dari tepi atas).
 - **Always On Top:** Selalu melayang di atas jendela aplikasi lain tanpa mengganggu fokus kerja.
-- **Window Transparan & Borderless:** Tidak ada title bar, border window standar, atau ikon taskbar yang mengganggu.
-- **Dynamic Resize IPC:** Ukuran window desktop diubah secara otomatis oleh backend Rust mengikuti state animasi React, sehingga area desktop transparan di sekitarnya tetap dapat diklik (click-through).
+- **Window Transparan & Borderless:** Tidak ada title bar atau border window standar yang mengganggu, sementara ikon tray tetap tersedia untuk menampilkan atau menutup aplikasi.
+- **Fixed Window + Native Click-Through:** Window native memiliki ukuran tetap 504×508 px (cukup untuk state expanded + shadow), sehingga animasi island tidak memicu resize window. Area transparan di luar island dibuat tembus klik oleh hit-test loop native (`hittest.rs`), jadi desktop di sekitarnya tetap bisa diinteraksi.
 
 ### 2. Tiga State Interaktif & Animasi Halus
-- **Compact State:** Kapsul kecil ringkas menampilkan waktu digital, cuaca ringkas (suhu & ikon), mini audio visualizer yang bergerak, serta indikator badge notifikasi yang belum dibaca.
-- **Notification State:** Kapsul melebar secara elastis saat notifikasi Windows diterima (lengkap dengan styling hijau WhatsApp, nama pengirim, pesan singkat, dan tombol dismiss). Otomatis kembali ke compact setelah durasi selesai.
-- **Expanded Dashboard:** Panel kontrol berukuran ~440x460px terbuka dengan spring animation saat kapsul diklik atau ditekan shortcut keyboard.
+- **Compact State:** Kapsul minimalis berukuran tetap 176×40 px, hanya menampilkan ikon & suhu cuaca, waktu digital, dan satu titik indikator notifikasi belum dibaca.
+- **Notification State:** Kapsul 360×64 px dengan app icon, judul, isi singkat, dan tombol dismiss. Otomatis kembali ke compact setelah durasi selesai.
+- **Expanded Dashboard:** Panel 440×460 px dengan header ringkas, tab icon-only, dan spring animation. Bisa dibuka dengan **hover** (default) atau **click** sesuai pengaturan.
 
 ### 3. Modul & Widget Terintegrasi
 - **Cuaca Terkini (Open-Meteo API):** Suhu real-time, kondisi cuaca, feels like, kelembapan, kecepatan angin, suhu min/max, pencarian lokasi (Jakarta, Surabaya, Bandung, Bali, Singapura, Tokyo, London, dll.), dan sistem cache offline jika internet terputus.
 - **Kalender & Agenda Lokal:** Tampilan tanggal hari ini, daftar agenda kronologis, countdown waktu tersisa, form pembuatan agenda baru (Judul, Jam, Lokasi), tombol hapus, dan penyimpanan persisten.
-- **Windows Notification Bridge:** Menggunakan WinRT `UserNotificationListener` untuk mendengarkan notifikasi Windows 10/11 dan WhatsApp Desktop secara native. Dilengkapi filter blocklist, privacy toggle (menyembunyikan isi pesan), dan simulator notifikasi untuk pengujian instan.
-- **Media Controls Widget:** Visualizer waveform 3-bar animasi dan kontrol pemutar audio cepat (Play/Pause, Track info).
-- **Pengaturan Lengkap:** Konfigurasi Autostart saat Windows booting, Always on Top, durasi auto-collapse notifikasi, interval refresh cuaca, dan Reduced Motion.
+- **Windows Notification Bridge:** Menggunakan WinRT `UserNotificationListener` untuk mendengarkan notifikasi Windows 10/11 dan WhatsApp Desktop secara native. Dilengkapi filter blocklist dan privacy toggle (menyembunyikan isi pesan).
+- **Media Controls Widget:** Kontrol pemutar audio cepat (Play/Pause, track info) yang tampil di Overview saat media sedang diputar.
+- **Pengaturan Lengkap:** Mode interaksi **Hover / Click** untuk expand-collapse, konfigurasi Autostart, Always on Top, durasi auto-collapse notifikasi, interval refresh cuaca, dan Reduced Motion.
 
 ---
 
@@ -127,16 +127,17 @@ DI-win/
 │   │   └── IslandContext.tsx      # Central State Manager & Tauri Event Bridge
 │   ├── components/
 │   │   ├── Island/
-│   │   │   ├── IslandRoot.tsx     # Komponen kapsul utama dengan Motion springs
-│   │   │   ├── CompactView.tsx    # Tampilan pil ringkas saat idle
-│   │   │   ├── NotificationView.tsx # Tampilan banner notifikasi (WhatsApp style)
-│   │   │   └── ExpandedView.tsx   # Panel expanded dengan navigasi tab
+│   │   │   ├── IslandRoot.tsx     # Kapsul utama: spring morph, hover/click, hit-rect
+│   │   │   ├── dimensions.ts      # Ukuran fixed tiap state island
+│   │   │   ├── CompactView.tsx    # Tampilan pil minimalis (cuaca + jam)
+│   │   │   ├── NotificationView.tsx # Banner notifikasi ringkas
+│   │   │   └── ExpandedView.tsx   # Panel expanded dengan tab icon-only
 │   │   └── Dashboard/
 │   │       ├── OverviewTab.tsx    # Tab ringkasan cuaca, agenda, media
 │   │       ├── WeatherTab.tsx     # Tab detail cuaca & pemilih kota
 │   │       ├── CalendarTab.tsx    # Tab agenda & pembuatan jadwal
-│   │       ├── NotificationsTab.tsx # Tab history notifikasi & test triggers
-│   │       └── SettingsTab.tsx    # Tab pengaturan autostart & privasi
+│   │       ├── NotificationsTab.tsx # Tab history notifikasi & izin Windows
+│   │       └── SettingsTab.tsx    # Tab pengaturan interaksi, autostart & privasi
 └── src-tauri/
     ├── Cargo.toml                 # Dependensi Rust & Windows WinRT crates
     ├── tauri.conf.json            # Konfigurasi window transparan & always-on-top
@@ -145,7 +146,8 @@ DI-win/
     └── src/
         ├── main.rs                # Rust executable entry point
         ├── lib.rs                 # Tauri application builder & system tray
-        ├── window.rs              # Logika window positioning & dynamic resize
+        ├── window.rs              # Posisi & ukuran window fixed (504×508)
+        ├── hittest.rs             # Native click-through hover/hit-test loop
         ├── notifications.rs       # WinRT UserNotificationListener bridge
         └── settings.rs            # Windows Registry autostart integration
 ```

@@ -1,244 +1,411 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Sun,
   Cloud,
   CloudRain,
-  Calendar,
-  Clock,
-  MapPin,
+  CloudLightning,
+  Clock as ClockIcon,
   Play,
   Pause,
+  SkipBack,
   SkipForward,
-  ChevronRight,
-  Send,
+  Volume2,
+  Shuffle,
 } from 'lucide-react';
 import { useIsland } from '../../context/IslandContext';
+import {
+  detectMediaApp,
+  MEDIA_THEMES,
+  SupportedMediaApp,
+} from '../../utils/mediaTheme';
 
 export const OverviewTab: React.FC = () => {
   const {
     weather,
-    events,
-    notifications,
     audioPlayback,
     setAudioPlayback,
     setActiveTab,
-    pushNotification,
-    settings,
   } = useIsland();
 
-  // Find next upcoming event
-  const now = Date.now();
-  const upcomingEvents = events.filter((e) => e.startAt >= now - 1000 * 60 * 30);
-  const nextEvent = upcomingEvents[0];
+  const [now, setNow] = useState(() => new Date());
 
-  const recentNotif = notifications[0];
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
-  const getWeatherIcon = () => {
-    if (!weather) return <Sun className="w-5 h-5 text-amber-400" />;
-    const code = weather.weatherCode;
-    if (code >= 51 && code <= 82) return <CloudRain className="w-5 h-5 text-sky-400" />;
-    if (code >= 1 && code <= 3) return <Cloud className="w-5 h-5 text-slate-300" />;
-    return <Sun className="w-5 h-5 text-amber-400" />;
+  const isTauri =
+    typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+  // Active theme based on dynamic app source
+  const activeTheme = detectMediaApp(
+    audioPlayback?.sourceApp,
+    audioPlayback?.title,
+    audioPlayback?.artist
+  );
+
+  const getWeatherIcon = (code: number | undefined) => {
+    if (code === undefined) {
+      return <Sun className="h-5 w-5 text-amber-400" />;
+    }
+    if (code >= 95) {
+      return <CloudLightning className="h-5 w-5 text-amber-300" />;
+    }
+    if (code >= 51 && code <= 82) {
+      return <CloudRain className="h-5 w-5 text-sky-400" />;
+    }
+    if (code >= 1 && code <= 3) {
+      return <Cloud className="h-5 w-5 text-neutral-300" />;
+    }
+    return <Sun className="h-5 w-5 text-amber-400" />;
   };
 
-  const formatEventTime = (timestamp: number) => {
-    const d = new Date(timestamp);
-    return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const formatSeconds = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = Math.floor(sec % 60);
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
   };
 
-  const getEventTimeRemaining = (timestamp: number) => {
-    const diff = timestamp - Date.now();
-    if (diff < 0) return 'Ongoing';
-    const minutes = Math.floor(diff / (1000 * 60));
-    if (minutes < 60) return `in ${minutes}m`;
-    const hours = Math.floor(minutes / 60);
-    return `in ${hours}h ${minutes % 60}m`;
+  // Toggle play/pause
+  const handleTogglePlayPause = () => {
+    if (isTauri) {
+      import('@tauri-apps/api/core')
+        .then(({ invoke }) => invoke('media_toggle_play_pause'))
+        .catch(console.error);
+    }
+    setAudioPlayback((prev) =>
+      prev
+        ? { ...prev, isPlaying: !prev.isPlaying }
+        : {
+            title: activeTheme.sampleTrack.title,
+            artist: activeTheme.sampleTrack.artist,
+            isPlaying: true,
+            progress: 0.1,
+            duration: activeTheme.sampleTrack.duration,
+            sourceApp: activeTheme.id,
+          }
+    );
   };
 
-  // Demo trigger helper
-  const handleSimulateWhatsApp = () => {
-    pushNotification({
-      appId: 'com.whatsapp.desktop',
-      appName: 'WhatsApp',
-      title: 'Dewi Lestari',
-      body: 'Meetingnya jadi jam 14:00 di Teams ya, jangan lupa siapin decknya!',
-    });
+  const handleSkipNext = () => {
+    if (isTauri) {
+      import('@tauri-apps/api/core')
+        .then(({ invoke }) => invoke('media_skip_next'))
+        .catch(console.error);
+    }
+    // In preview/simulation, cycle through apps or skip forward
+    handleCycleNextApp();
   };
+
+  const handleSkipPrev = () => {
+    if (isTauri) {
+      import('@tauri-apps/api/core')
+        .then(({ invoke }) => invoke('media_skip_prev'))
+        .catch(console.error);
+    }
+    setAudioPlayback((prev) => (prev ? { ...prev, progress: 0 } : null));
+  };
+
+  // Switch between supported media apps (Spotify -> YouTube -> Apple Music -> SoundCloud -> etc.)
+  const handleCycleNextApp = () => {
+    const appOrder: SupportedMediaApp[] = [
+      'spotify',
+      'youtube',
+      'apple',
+      'soundcloud',
+      'tidal',
+      'chrome',
+    ];
+    const currentIndex = appOrder.indexOf(activeTheme.id);
+    const nextAppId = appOrder[(currentIndex + 1) % appOrder.length];
+    const nextTheme = MEDIA_THEMES[nextAppId];
+
+    setAudioPlayback((prev) => ({
+      title: nextTheme.sampleTrack.title,
+      artist: nextTheme.sampleTrack.artist,
+      isPlaying: prev ? prev.isPlaying : true,
+      progress: prev ? prev.progress : 0.35,
+      duration: nextTheme.sampleTrack.duration,
+      sourceApp: nextAppId,
+    }));
+  };
+
+  const durationSec = audioPlayback?.duration || activeTheme.sampleTrack.duration;
+  const currentProgress = audioPlayback?.progress ?? 0.35;
+  const elapsedSec = Math.floor(currentProgress * durationSec);
+  const isPlaying = audioPlayback?.isPlaying ?? false;
+
+  const AppIcon = activeTheme.renderIcon;
 
   return (
-    <div className="space-y-3">
-      {/* Top 2-Column Grid: Weather & Next Agenda */}
-      <div className="grid grid-cols-2 gap-2.5">
-        {/* Weather Mini Card */}
-        <div
+    <div className="flex h-full gap-3.5 select-none">
+      {/* LEFT COLUMN: Jam & Weather (Kotak Persegi) */}
+      <div className="flex w-[130px] shrink-0 flex-col justify-between gap-3">
+        {/* Kotak Jam (Clock Square Box - Borderless) */}
+        <div className="relative flex flex-1 flex-col justify-between overflow-hidden rounded-2xl bg-white/[0.04] p-3 shadow-sm transition-colors duration-200 hover:bg-white/[0.07]">
+          {/* OLED subtle corner glow */}
+          <div className="pointer-events-none absolute -right-6 -top-6 h-14 w-14 rounded-full bg-sky-500/10 blur-xl" />
+
+          {/* Top: Header with Day and Clock icon */}
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider text-neutral-400">
+              <ClockIcon className="h-3 w-3 text-sky-400" />
+              {now.toLocaleDateString([], { weekday: 'short' })}
+            </span>
+            <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shadow-[0_0_6px_rgba(56,189,248,0.7)]" />
+          </div>
+
+          {/* Center: Large Time */}
+          <div className="my-auto py-1">
+            <p className="text-[26px] font-bold leading-none tabular-nums tracking-tight text-white">
+              {now.toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+                hour12: false,
+              })}
+            </p>
+            <p className="mt-1 text-[10px] tabular-nums text-neutral-400 font-medium">
+              :{now.getSeconds().toString().padStart(2, '0')} sec
+            </p>
+          </div>
+
+          {/* Bottom: Date */}
+          <div className="pt-1.5 opacity-80">
+            <p className="truncate text-[10px] font-medium text-neutral-400">
+              {now.toLocaleDateString([], {
+                day: 'numeric',
+                month: 'short',
+                year: 'numeric',
+              })}
+            </p>
+          </div>
+        </div>
+
+        {/* Kotak Weather (Weather Square Box - Borderless) */}
+        <button
+          type="button"
           onClick={() => setActiveTab('weather')}
-          className="group relative p-3 bg-neutral-900/80 hover:bg-neutral-800/90 rounded-2xl border border-white/5 hover:border-white/10 transition-all cursor-pointer flex flex-col justify-between overflow-hidden shadow-sm"
+          title="Lihat detail cuaca"
+          className="group relative flex flex-1 flex-col justify-between overflow-hidden rounded-2xl bg-white/[0.04] p-3 text-left shadow-sm transition-all duration-200 hover:bg-white/[0.07]"
         >
+          {/* Ambient weather glow */}
+          <div className="pointer-events-none absolute -bottom-6 -left-6 h-14 w-14 rounded-full bg-amber-500/10 blur-xl" />
+
+          {/* Top: Weather Icon & Location */}
           <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold tracking-wider uppercase text-neutral-400">
-              Weather
+            <span className="flex h-7 w-7 items-center justify-center rounded-xl bg-white/[0.06] shadow-sm transition-transform group-hover:scale-105">
+              {getWeatherIcon(weather?.weatherCode)}
             </span>
-            <div className="p-1 rounded-full bg-neutral-800 group-hover:bg-neutral-700 transition-colors">
-              {getWeatherIcon()}
-            </div>
-          </div>
-
-          <div className="mt-2">
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-bold tracking-tight text-white">
-                {weather ? `${weather.temperature}°` : '--°'}
-              </span>
-              <span className="text-xs text-neutral-400">
-                {weather?.weatherDescription || 'Loading...'}
-              </span>
-            </div>
-            <div className="flex items-center gap-1 text-[11px] text-neutral-400 mt-1 truncate">
-              <MapPin className="w-3 h-3 text-neutral-500 shrink-0" />
-              <span className="truncate">{weather?.locationName || 'Location'}</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Next Event Mini Card */}
-        <div
-          onClick={() => setActiveTab('calendar')}
-          className="group relative p-3 bg-neutral-900/80 hover:bg-neutral-800/90 rounded-2xl border border-white/5 hover:border-white/10 transition-all cursor-pointer flex flex-col justify-between overflow-hidden shadow-sm"
-        >
-          <div className="flex items-center justify-between">
-            <span className="text-[11px] font-semibold tracking-wider uppercase text-neutral-400">
-              Up Next
+            <span className="max-w-[64px] truncate text-[10px] font-medium text-neutral-400">
+              {weather?.locationName?.split(',')[0] || 'Jakarta'}
             </span>
-            <div className="p-1 rounded-full bg-neutral-800 group-hover:bg-neutral-700 transition-colors">
-              <Calendar className="w-4 h-4 text-violet-400" />
-            </div>
           </div>
 
-          <div className="mt-2">
-            {nextEvent ? (
-              <>
-                <p className="text-xs font-bold text-white truncate">{nextEvent.title}</p>
-                <div className="flex items-center gap-1 text-[11px] text-violet-300 mt-1">
-                  <Clock className="w-3 h-3 shrink-0" />
-                  <span>
-                    {formatEventTime(nextEvent.startAt)} ({getEventTimeRemaining(nextEvent.startAt)})
-                  </span>
-                </div>
-              </>
-            ) : (
-              <p className="text-xs text-neutral-400 italic">No events planned</p>
-            )}
+          {/* Center: Large Temperature */}
+          <div className="my-auto py-1">
+            <p className="text-[26px] font-bold leading-none tabular-nums tracking-tight text-white">
+              {weather ? `${weather.temperature}°` : '28°'}
+            </p>
+            <p className="mt-1 truncate text-[10px] font-medium text-neutral-300">
+              {weather?.weatherDescription || 'Cerah Berawan'}
+            </p>
           </div>
-        </div>
+
+          {/* Bottom: Feels like or high/low */}
+          <div className="flex items-center justify-between pt-1.5 text-[10px] text-neutral-400 opacity-80">
+            <span>Feels</span>
+            <span className="font-semibold text-neutral-300">
+              {weather ? `${weather.feelsLike}°` : '29°'}
+            </span>
+          </div>
+        </button>
       </div>
 
-      {/* Media Player Card */}
-      {audioPlayback && (
-        <div className="p-3 bg-neutral-900/80 rounded-2xl border border-white/5 flex items-center justify-between gap-3 shadow-sm">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-neutral-800 to-neutral-950 border border-white/10 flex items-center justify-center shrink-0 shadow-inner">
-            <div className="w-3 h-3 rounded-full bg-emerald-500/80 animate-ping" />
-          </div>
+      {/* RIGHT COLUMN: Music / Sound Player Card (Borderless) */}
+      <div
+        className="relative flex flex-1 min-w-0 flex-col justify-between overflow-hidden rounded-2xl p-4 shadow-xl transition-all duration-300"
+        style={{
+          background: `radial-gradient(circle at 90% 10%, ${activeTheme.accentColor}22 0%, rgba(255, 255, 255, 0.03) 60%)`,
+        }}
+      >
+        {/* Top: App Indicator Badge & Animated Equalizer Sound Wave */}
+        <div className="flex items-center justify-between gap-2">
+          {/* Dynamic App Badge with icon & click-to-cycle */}
+          <button
+            type="button"
+            onClick={handleCycleNextApp}
+            title={`Aplikasi aktif: ${activeTheme.name}. Klik untuk mengganti aplikasi.`}
+            className="flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold transition-all hover:scale-105"
+            style={{
+              backgroundColor: activeTheme.badgeBg,
+              color: activeTheme.badgeText,
+              boxShadow: `0 0 12px ${activeTheme.accentColor}25`,
+            }}
+          >
+            <AppIcon className="h-3.5 w-3.5" size={14} />
+            <span>{activeTheme.name}</span>
+          </button>
 
-          <div className="flex-1 min-w-0">
-            <p className="text-xs font-bold text-white truncate">{audioPlayback.title}</p>
-            <p className="text-[11px] text-neutral-400 truncate">{audioPlayback.artist}</p>
-            {/* Progress line */}
-            <div className="w-full bg-neutral-800 h-1 rounded-full mt-2 overflow-hidden">
-              <div
-                className="bg-emerald-400 h-full rounded-full transition-all duration-300"
-                style={{ width: `${audioPlayback.progress * 100}%` }}
+          {/* Dynamic Sound Equalizer indicator */}
+          <div className="flex items-center gap-1.5 rounded-full bg-black/40 px-2 py-1">
+            {/* Animated Equalizer bars */}
+            <div className="flex h-3 items-end gap-0.5">
+              <span
+                className={`w-0.5 rounded-full transition-all duration-300 ${
+                  isPlaying ? 'h-3 animate-pulse' : 'h-1.5'
+                }`}
+                style={{ backgroundColor: activeTheme.accentColor }}
+              />
+              <span
+                className={`w-0.5 rounded-full transition-all duration-200 ${
+                  isPlaying ? 'h-2 animate-bounce' : 'h-2'
+                }`}
+                style={{ backgroundColor: activeTheme.accentColor }}
+              />
+              <span
+                className={`w-0.5 rounded-full transition-all duration-300 ${
+                  isPlaying ? 'h-3 animate-pulse' : 'h-1'
+                }`}
+                style={{ backgroundColor: activeTheme.accentColor }}
+              />
+              <span
+                className={`w-0.5 rounded-full transition-all duration-150 ${
+                  isPlaying ? 'h-2.5 animate-bounce' : 'h-1.5'
+                }`}
+                style={{ backgroundColor: activeTheme.accentColor }}
               />
             </div>
-          </div>
-
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              onClick={() => {
-                if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
-                  import('@tauri-apps/api/core').then(({ invoke }) => {
-                    invoke('media_toggle_play_pause').catch(console.error);
-                  });
-                }
-                setAudioPlayback((prev) =>
-                  prev ? { ...prev, isPlaying: !prev.isPlaying } : null
-                );
-              }}
-              className="w-8 h-8 rounded-full bg-neutral-800 hover:bg-neutral-700 text-white flex items-center justify-center transition-colors"
-              title={audioPlayback.isPlaying ? 'Pause' : 'Play'}
+            <span
+              className="text-[9px] font-bold uppercase tracking-wider"
+              style={{ color: activeTheme.accentColor }}
             >
-              {audioPlayback.isPlaying ? (
-                <Pause className="w-3.5 h-3.5 fill-white" />
-              ) : (
-                <Play className="w-3.5 h-3.5 fill-white ml-0.5" />
-              )}
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
-                  import('@tauri-apps/api/core').then(({ invoke }) => {
-                    invoke('media_skip_next').catch(console.error);
-                  });
-                }
-              }}
-              className="w-8 h-8 rounded-full bg-neutral-800/60 hover:bg-neutral-700 text-neutral-400 hover:text-white flex items-center justify-center transition-colors"
-              title="Next Track"
-            >
-              <SkipForward className="w-3.5 h-3.5" />
-            </button>
+              {isPlaying ? 'Live' : 'Paused'}
+            </span>
           </div>
         </div>
-      )}
 
-      {/* Latest Notification Snippet & Quick Simulator */}
-      <div className="p-3 bg-neutral-900/80 rounded-2xl border border-white/5 space-y-2.5">
-        <div className="flex items-center justify-between">
-          <span className="text-[11px] font-semibold tracking-wider uppercase text-neutral-400">
-            Recent Notification
-          </span>
-          <button
-            type="button"
-            onClick={() => setActiveTab('notifications')}
-            className="flex items-center gap-0.5 text-[11px] text-neutral-400 hover:text-white transition-colors"
-          >
-            <span>View all</span>
-            <ChevronRight className="w-3 h-3" />
-          </button>
-        </div>
-
-        {recentNotif ? (
+        {/* Center: Track Artwork & Info */}
+        <div className="my-auto flex items-center gap-3.5 py-2">
+          {/* Dynamic Vinyl / Artwork Icon with theme glow */}
           <div
-            onClick={() => setActiveTab('notifications')}
-            className="flex items-center gap-2.5 p-2 rounded-xl bg-neutral-800/50 hover:bg-neutral-800 cursor-pointer transition-colors"
+            className="relative flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl shadow-lg transition-transform duration-500"
+            style={{
+              background: `linear-gradient(135deg, ${activeTheme.accentColor}33 0%, rgba(20,20,24,0.95) 100%)`,
+              boxShadow: `0 4px 18px ${activeTheme.accentColor}30`,
+            }}
           >
-            <div className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between text-xs font-semibold text-white">
-                <span className="truncate">{recentNotif.title}</span>
-                <span className="text-[10px] text-neutral-500 font-normal">
-                  {recentNotif.appName}
-                </span>
-              </div>
-              <p className="text-[11px] text-neutral-400 truncate mt-0.5">
-                {settings.hideNotificationContent ? 'Notification received' : recentNotif.body}
-              </p>
+            {/* Spinning center disk when playing */}
+            <div
+              className={`flex h-8 w-8 items-center justify-center rounded-full bg-black/60 shadow-inner ${
+                isPlaying ? 'animate-[spin_6s_linear_infinite]' : ''
+              }`}
+            >
+              <AppIcon className="h-4 w-4" size={16} />
             </div>
           </div>
-        ) : (
-          <p className="text-xs text-neutral-400 italic">No notifications yet</p>
-        )}
 
-        {/* Quick action bar */}
-        <div className="pt-1 flex items-center justify-between border-t border-white/5">
-          <span className="text-[10px] text-neutral-500">Test Dynamic Island trigger:</span>
-          <button
-            type="button"
-            onClick={handleSimulateWhatsApp}
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 hover:bg-emerald-500/20 text-emerald-400 border border-emerald-500/20 text-[11px] font-medium transition-colors"
-          >
-            <Send className="w-3 h-3" />
-            <span>Simulate WhatsApp</span>
-          </button>
+          {/* Track details */}
+          <div className="min-w-0 flex-1">
+            <h4 className="truncate text-[14px] font-bold leading-snug text-white">
+              {audioPlayback?.title || activeTheme.sampleTrack.title}
+            </h4>
+            <p className="truncate text-[11px] font-medium text-neutral-400">
+              {audioPlayback?.artist || activeTheme.sampleTrack.artist}
+            </p>
+            <p
+              className="mt-0.5 truncate text-[9px] font-semibold uppercase tracking-wider opacity-75"
+              style={{ color: activeTheme.accentColor }}
+            >
+              {activeTheme.name} • Windows Audio
+            </p>
+          </div>
+        </div>
+
+        {/* Bottom Section: Progress Bar & Playback Controls */}
+        <div className="space-y-2">
+          {/* Progress Bar & Timestamps */}
+          <div>
+            <div
+              className="group/seek relative h-1.5 w-full cursor-pointer overflow-hidden rounded-full bg-white/[0.08]"
+              onClick={(e) => {
+                const rect = e.currentTarget.getBoundingClientRect();
+                const pos = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                setAudioPlayback((prev) => (prev ? { ...prev, progress: pos } : null));
+              }}
+            >
+              <div
+                className="h-full rounded-full transition-all duration-150"
+                style={{
+                  width: `${Math.min(100, Math.max(0, currentProgress * 100))}%`,
+                  backgroundColor: activeTheme.accentColor,
+                  boxShadow: `0 0 10px ${activeTheme.accentColor}`,
+                }}
+              />
+            </div>
+
+            <div className="mt-1 flex items-center justify-between text-[10px] tabular-nums text-neutral-400">
+              <span>{formatSeconds(elapsedSec)}</span>
+              <span>{formatSeconds(durationSec)}</span>
+            </div>
+          </div>
+
+          {/* Controls Bar */}
+          <div className="flex items-center justify-between pt-0.5">
+            <button
+              type="button"
+              onClick={handleCycleNextApp}
+              title="Ganti aplikasi musik (Spotify, YouTube, Apple Music, dll)"
+              className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-400 transition-colors hover:bg-white/[0.08] hover:text-white"
+            >
+              <Shuffle className="h-3.5 w-3.5" />
+            </button>
+
+            {/* Main Center Controls */}
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleSkipPrev}
+                title="Previous track"
+                aria-label="Previous track"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-300 transition-all hover:bg-white/[0.08] hover:text-white"
+              >
+                <SkipBack className="h-3.5 w-3.5" />
+              </button>
+
+              {/* Dynamic Themed Play/Pause Button */}
+              <button
+                type="button"
+                onClick={handleTogglePlayPause}
+                title={isPlaying ? 'Pause' : 'Play'}
+                aria-label={isPlaying ? 'Pause' : 'Play'}
+                className="flex h-9 w-9 items-center justify-center rounded-full text-white shadow-lg transition-transform hover:scale-105 active:scale-95"
+                style={{
+                  backgroundColor: activeTheme.accentColor,
+                  boxShadow: `0 0 16px ${activeTheme.accentColor}80`,
+                }}
+              >
+                {isPlaying ? (
+                  <Pause className="h-4 w-4 fill-white" />
+                ) : (
+                  <Play className="ml-0.5 h-4 w-4 fill-white" />
+                )}
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSkipNext}
+                title="Next track"
+                aria-label="Next track"
+                className="flex h-7 w-7 items-center justify-center rounded-full text-neutral-300 transition-all hover:bg-white/[0.08] hover:text-white"
+              >
+                <SkipForward className="h-3.5 w-3.5" />
+              </button>
+            </div>
+
+            <div className="flex items-center gap-1 text-neutral-400">
+              <Volume2 className="h-3.5 w-3.5" />
+            </div>
+          </div>
         </div>
       </div>
     </div>

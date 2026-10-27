@@ -1,18 +1,145 @@
-import React, { useEffect, useRef } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from 'react';
 import { motion, AnimatePresence, Transition } from 'framer-motion';
 import { useIsland } from '../../context/IslandContext';
 import { CompactView } from './CompactView';
 import { NotificationView } from './NotificationView';
 import { ExpandedView } from './ExpandedView';
+import { ISLAND_DIMENSIONS, ISLAND_TOP } from './dimensions';
+
+const HOVER_EXPAND_DELAY = 120;
+const HOVER_COLLAPSE_DELAY = 280;
 
 export const IslandRoot: React.FC = () => {
-  const { state, setState, activeNotification, audioPlayback, notifications, settings } =
-    useIsland();
+  const { state, setState, activeNotification, settings } = useIsland();
   const islandRef = useRef<HTMLDivElement>(null);
 
-  // Click outside listener when expanded
+  const hoverExpandTimer = useRef<number | undefined>(undefined);
+  const hoverCollapseTimer = useRef<number | undefined>(undefined);
+
+  const stateRef = useRef(state);
+  const triggerRef = useRef(settings.expandTrigger);
+
+  const isTauri =
+    typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+
+  const dimensions = ISLAND_DIMENSIONS[state];
+
+  useLayoutEffect(() => {
+    stateRef.current = state;
+    triggerRef.current = settings.expandTrigger;
+  }, [state, settings.expandTrigger]);
+
+  const clearHoverTimers = useCallback(() => {
+    window.clearTimeout(hoverExpandTimer.current);
+    window.clearTimeout(hoverCollapseTimer.current);
+  }, []);
+
+  const scheduleExpand = useCallback(() => {
+    window.clearTimeout(hoverExpandTimer.current);
+    window.clearTimeout(hoverCollapseTimer.current);
+    hoverExpandTimer.current = window.setTimeout(() => {
+      if (stateRef.current === 'compact') {
+        setState('expanded');
+      }
+    }, HOVER_EXPAND_DELAY);
+  }, [setState]);
+
+  const scheduleCollapse = useCallback(() => {
+    window.clearTimeout(hoverExpandTimer.current);
+    window.clearTimeout(hoverCollapseTimer.current);
+    hoverCollapseTimer.current = window.setTimeout(() => {
+      if (stateRef.current !== 'expanded') {
+        return;
+      }
+
+      const active = document.activeElement;
+      const isEditing =
+        active instanceof HTMLElement &&
+        ['INPUT', 'TEXTAREA', 'SELECT'].includes(active.tagName);
+
+      if (!isEditing) {
+        setState('compact');
+      }
+    }, HOVER_COLLAPSE_DELAY);
+  }, [setState]);
+
+  const handleHoverChange = useCallback(
+    (hovered: boolean) => {
+      if (triggerRef.current !== 'hover') {
+        return;
+      }
+
+      if (hovered && stateRef.current === 'compact') {
+        scheduleExpand();
+      } else if (!hovered && stateRef.current === 'expanded') {
+        scheduleCollapse();
+      } else {
+        clearHoverTimers();
+      }
+    },
+    [clearHoverTimers, scheduleCollapse, scheduleExpand]
+  );
+
+  // In Tauri the native hit-test loop reports hover based on the fixed hit rect,
+  // which stays stable while the island is animating.
   useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
+    if (!isTauri) return;
+
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    import('@tauri-apps/api/event')
+      .then(({ listen }) =>
+        listen<boolean>('island-hover', (event) => {
+          handleHoverChange(event.payload);
+        })
+      )
+      .then((fn) => {
+        if (cancelled) {
+          fn();
+        } else {
+          unlisten = fn;
+        }
+      })
+      .catch(() => {
+        // Native hover events are optional; browser preview uses pointers.
+      });
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [handleHoverChange, isTauri]);
+
+  // Keep the native click-through hit rect in sync with the fixed island size.
+  useEffect(() => {
+    if (!isTauri) return;
+
+    const viewportWidth = window.innerWidth || 660;
+    const x = Math.max(0, (viewportWidth - dimensions.width) / 2);
+
+    import('@tauri-apps/api/core')
+      .then(({ invoke }) =>
+        invoke('set_island_hit_rect', {
+          x: state === 'expanded' ? 0 : x,
+          y: state === 'expanded' ? 0 : ISLAND_TOP,
+          width: state === 'expanded' ? (window.innerWidth || 660) : dimensions.width,
+          height: state === 'expanded' ? (window.innerHeight || 420) : dimensions.height,
+        })
+      )
+      .catch((err) => {
+        console.debug('Unable to update island hit rect:', err);
+      });
+  }, [dimensions.height, dimensions.width, isTauri, state]);
+
+  // Collapse when clicking outside (browser) or when the Tauri window loses focus.
+  useEffect(() => {
+    const handlePointerDown = (e: PointerEvent) => {
       if (
         state === 'expanded' &&
         islandRef.current &&
@@ -21,121 +148,113 @@ export const IslandRoot: React.FC = () => {
         setState('compact');
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [state, setState]);
 
-  // Determine dynamic dimensions based on state
-  const hasAudio = !!audioPlayback?.isPlaying;
-  const hasUnread = notifications.some((n) => n.unread);
+    document.addEventListener('pointerdown', handlePointerDown);
 
-  let targetWidth = 190;
-  if (hasAudio && hasUnread) {
-    targetWidth = 230;
-  } else if (hasAudio || hasUnread) {
-    targetWidth = 210;
-  }
+    const handleWindowBlur = () => {
+      if (isTauri && state === 'expanded') {
+        setState('compact');
+      }
+    };
 
-  const dimensions = {
-    compact: {
-      width: targetWidth,
-      height: 38,
-      borderRadius: 9999,
-    },
-    notification: {
-      width: 380,
-      height: 64,
-      borderRadius: 28,
-    },
-    expanded: {
-      width: 440,
-      height: 460,
-      borderRadius: 32,
-    },
-  }[state];
+    window.addEventListener('blur', handleWindowBlur);
 
-  // Notify Tauri backend to resize window if running in Tauri
+    return () => {
+      document.removeEventListener('pointerdown', handlePointerDown);
+      window.removeEventListener('blur', handleWindowBlur);
+    };
+  }, [isTauri, state, setState]);
+
+  // Clear pending hover timers when the interaction mode changes.
   useEffect(() => {
-    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
-      import('@tauri-apps/api/core').then(({ invoke }) => {
-        invoke('resize_island_window', {
-          width: dimensions.width + 30,
-          height: dimensions.height + 30,
-        }).catch((err) => {
-          console.debug('Tauri resize invoke not active yet:', err);
-        });
-      });
-    }
-  }, [dimensions.width, dimensions.height]);
+    clearHoverTimers();
+  }, [clearHoverTimers, settings.expandTrigger]);
 
-  const springTransition: Transition = settings.reducedMotionEnabled
-    ? { duration: 0.15, ease: 'easeInOut' }
+  useEffect(() => () => clearHoverTimers(), [clearHoverTimers]);
+
+  const handleClick = () => {
+    if (state === 'compact') {
+      clearHoverTimers();
+      setState('expanded');
+    }
+  };
+
+  const transition: Transition = settings.reducedMotionEnabled
+    ? { duration: 0.18, ease: 'easeOut' }
     : {
         type: 'spring',
-        stiffness: 460,
-        damping: 32,
+        stiffness: 420,
+        damping: 40,
         mass: 0.85,
       };
 
+  const opacity = (settings.backgroundOpacity ?? 80) / 100;
+  const blur = settings.backgroundBlur ?? 20;
+
   return (
-    <div className="fixed top-3 left-0 right-0 flex justify-center pointer-events-none z-50">
-      <motion.div
-        ref={islandRef}
-        layout
-        className="pointer-events-auto relative overflow-hidden bg-black text-white border border-white/[0.14] shadow-[0_20px_50px_rgba(0,0,0,0.85),0_0_0_1px_rgba(255,255,255,0.06)]"
-        animate={{
-          width: dimensions.width,
-          height: dimensions.height,
-          borderRadius: dimensions.borderRadius,
-        }}
-        transition={springTransition}
-        whileHover={state === 'compact' ? { scale: 1.03 } : {}}
+    <>
+      {/* Backdrop overlay for click-outside to collapse when expanded */}
+      {state === 'expanded' && (
+        <div
+          className="pointer-events-auto fixed inset-0 z-40 cursor-default bg-black/10 backdrop-blur-[1px] transition-opacity duration-200"
+          onPointerDown={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            setState('compact');
+          }}
+        />
+      )}
+
+      <div
+        className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center"
+        style={{ paddingTop: ISLAND_TOP }}
       >
-        {/* Subtle OLED Rim Highlight / Reflection */}
-        <div className="absolute inset-x-0 top-0 h-[1px] bg-gradient-to-r from-transparent via-white/20 to-transparent pointer-events-none" />
+        <motion.div
+          ref={islandRef}
+          className="pointer-events-auto relative select-none overflow-hidden text-white"
+          style={{
+            backgroundColor: `rgba(10, 10, 13, ${opacity})`,
+            backdropFilter: blur > 0 ? `blur(${blur}px) saturate(180%)` : 'none',
+            WebkitBackdropFilter: blur > 0 ? `blur(${blur}px) saturate(180%)` : 'none',
+            boxShadow:
+              opacity < 1
+                ? '0 24px 60px -12px rgba(0, 0, 0, 0.85), 0 8px 24px -6px rgba(0, 0, 0, 0.5)'
+                : '0 12px 30px -10px rgba(0, 0, 0, 0.8)',
+            willChange: 'width, height, border-radius',
+          }}
+          animate={{
+            width: dimensions.width,
+            height: dimensions.height,
+            borderRadius: dimensions.borderRadius,
+          }}
+          transition={transition}
+          onClick={handleClick}
+          onPointerEnter={
+            isTauri ? undefined : () => handleHoverChange(true)
+          }
+          onPointerLeave={
+            isTauri ? undefined : () => handleHoverChange(false)
+          }
+        >
 
-        {/* View Switcher based on State */}
-        <AnimatePresence mode="wait">
-          {state === 'compact' && (
+          <AnimatePresence initial={false} mode="sync">
             <motion.div
-              key="compact"
-              className="w-full h-full flex items-center justify-center"
+              key={state}
+              className="absolute inset-0"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
+              exit={{ opacity: 0, pointerEvents: 'none' }}
+              transition={{ duration: settings.reducedMotionEnabled ? 0.12 : 0.18, ease: 'easeOut' }}
             >
-              <CompactView />
+              {state === 'compact' && <CompactView />}
+              {state === 'notification' && activeNotification && (
+                <NotificationView notification={activeNotification} />
+              )}
+              {state === 'expanded' && <ExpandedView />}
             </motion.div>
-          )}
-
-          {state === 'notification' && activeNotification && (
-            <motion.div
-              key="notification"
-              className="w-full h-full flex items-center"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.15 }}
-            >
-              <NotificationView notification={activeNotification} />
-            </motion.div>
-          )}
-
-          {state === 'expanded' && (
-            <motion.div
-              key="expanded"
-              className="w-full h-full flex flex-col"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.18 }}
-            >
-              <ExpandedView />
-            </motion.div>
-          )}
-        </AnimatePresence>
-      </motion.div>
-    </div>
+          </AnimatePresence>
+        </motion.div>
+      </div>
+    </>
   );
 };

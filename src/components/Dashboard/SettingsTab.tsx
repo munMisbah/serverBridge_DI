@@ -1,128 +1,296 @@
 import React from 'react';
-import { Monitor, EyeOff, Sparkles, RefreshCw, Power } from 'lucide-react';
+import {
+  Monitor,
+  EyeOff,
+  Sparkles,
+  RefreshCw,
+  Power,
+  MousePointer2,
+  MousePointerClick,
+  Sliders,
+} from 'lucide-react';
 import { useIsland } from '../../context/IslandContext';
+import { ExpandTrigger } from '../../types';
+
+interface ToggleRowProps {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+  checked: boolean;
+  onChange: () => void;
+  activeClass: string;
+}
+
+const ToggleRow: React.FC<ToggleRowProps> = ({
+  icon,
+  title,
+  description,
+  checked,
+  onChange,
+  activeClass,
+}) => (
+  <div className="flex items-center justify-between gap-3">
+    <div className="flex min-w-0 items-center gap-2.5">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.04]">
+        {icon}
+      </span>
+      <div className="min-w-0">
+        <p className="text-[12px] font-semibold text-white">{title}</p>
+        <p className="truncate text-[10px] leading-tight text-neutral-500">
+          {description}
+        </p>
+      </div>
+    </div>
+
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={onChange}
+      className={`relative h-5 w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 ${
+        checked ? activeClass : 'bg-white/10'
+      }`}
+    >
+      <span
+        className={`block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
+          checked ? 'translate-x-4' : 'translate-x-0'
+        }`}
+      />
+    </button>
+  </div>
+);
+
+const EXPAND_OPTIONS: {
+  id: ExpandTrigger;
+  label: string;
+  icon: typeof MousePointer2;
+}[] = [
+  { id: 'hover', label: 'Hover', icon: MousePointer2 },
+  { id: 'click', label: 'Click', icon: MousePointerClick },
+];
 
 export const SettingsTab: React.FC = () => {
   const { settings, updateSettings } = useIsland();
 
   return (
-    <div className="space-y-3">
-      {/* System & Window Settings */}
-      <div className="p-3 bg-neutral-900 rounded-2xl border border-white/5 space-y-3">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 block">
-          Window & Behavior
+    <div className="space-y-2.5">
+      {/* Interaction */}
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3.5">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">
+          Interaction
         </span>
 
-        {/* Always on top */}
+        <div className="mt-2.5 grid grid-cols-2 gap-1 rounded-xl border border-white/[0.06] bg-black/20 p-1">
+          {EXPAND_OPTIONS.map((option) => {
+            const Icon = option.icon;
+            const isActive = settings.expandTrigger === option.id;
+
+            return (
+              <button
+                key={option.id}
+                type="button"
+                onClick={() => updateSettings({ expandTrigger: option.id })}
+                aria-pressed={isActive}
+                className={`flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-[11px] font-medium transition-colors duration-200 ${
+                  isActive
+                    ? 'bg-white/[0.09] text-white'
+                    : 'text-neutral-500 hover:text-neutral-200'
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                <span>{option.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        <p className="mt-2 text-[10px] leading-relaxed text-neutral-500">
+          {settings.expandTrigger === 'hover'
+            ? 'Expand when pointer enters, collapse when it leaves. Press Esc or click outside to collapse.'
+            : 'Click the island to expand. Click outside or press Esc to collapse.'}
+        </p>
+      </div>
+
+      {/* Background Transparency & Blur (Efek Glass) */}
+      <div className="space-y-3.5 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3.5">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Monitor className="w-4 h-4 text-sky-400 shrink-0" />
-            <div>
-              <p className="text-xs font-semibold text-white">Always On Top</p>
-              <p className="text-[11px] text-neutral-400">Keep widget above other windows</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() => updateSettings({ alwaysOnTopEnabled: !settings.alwaysOnTopEnabled })}
-            className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-              settings.alwaysOnTopEnabled ? 'bg-sky-500' : 'bg-neutral-700'
-            }`}
+          <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
+            <Sliders className="h-3.5 w-3.5 text-sky-400" />
+            Glass Background &amp; Blur
+          </span>
+          <div
+            className="flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-[10px] font-medium"
+            style={{
+              backgroundColor: `rgba(255, 255, 255, ${(100 - (settings.backgroundOpacity ?? 80)) * 0.002 + 0.05})`,
+              borderColor: 'rgba(255, 255, 255, 0.15)',
+              backdropFilter: `blur(${settings.backgroundBlur ?? 20}px)`,
+            }}
           >
-            <div
-              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                settings.alwaysOnTopEnabled ? 'translate-x-5' : 'translate-x-0'
-              }`}
-            />
-          </button>
+            <span className="h-1.5 w-1.5 rounded-full bg-sky-400 shadow-[0_0_6px_rgba(56,189,248,0.7)]" />
+            <span>Glass Active</span>
+          </div>
         </div>
 
-        {/* Autostart */}
-        <div className="flex items-center justify-between pt-2 border-t border-white/5">
-          <div className="flex items-center gap-2">
-            <Power className="w-4 h-4 text-emerald-400 shrink-0" />
-            <div>
-              <p className="text-xs font-semibold text-white">Start With Windows</p>
-              <p className="text-[11px] text-neutral-400">Launch automatically on logon</p>
-            </div>
+        {/* Quick Presets */}
+        <div>
+          <span className="block text-[11px] font-medium text-neutral-300">Preset Kaca</span>
+          <div className="mt-1.5 grid grid-cols-4 gap-1">
+            {[
+              { label: 'Frosted', opacity: 65, blur: 24 },
+              { label: 'Acrylic', opacity: 80, blur: 20 },
+              { label: 'Deep', opacity: 90, blur: 12 },
+              { label: 'OLED', opacity: 100, blur: 0 },
+            ].map((preset) => {
+              const isSelected =
+                (settings.backgroundOpacity ?? 80) === preset.opacity &&
+                (settings.backgroundBlur ?? 20) === preset.blur;
+              return (
+                <button
+                  key={preset.label}
+                  type="button"
+                  onClick={() =>
+                    updateSettings({
+                      backgroundOpacity: preset.opacity,
+                      backgroundBlur: preset.blur,
+                    })
+                  }
+                  className={`rounded-lg py-1 text-[10px] font-medium transition-all ${
+                    isSelected
+                      ? 'border border-sky-500/40 bg-sky-500/20 text-sky-300'
+                      : 'border border-white/[0.06] bg-white/[0.04] text-neutral-400 hover:bg-white/[0.08] hover:text-white'
+                  }`}
+                >
+                  {preset.label}
+                </button>
+              );
+            })}
           </div>
-          <button
-            type="button"
-            onClick={() => updateSettings({ autostartEnabled: !settings.autostartEnabled })}
-            className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-              settings.autostartEnabled ? 'bg-emerald-500' : 'bg-neutral-700'
-            }`}
-          >
-            <div
-              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                settings.autostartEnabled ? 'translate-x-5' : 'translate-x-0'
-              }`}
-            />
-          </button>
         </div>
 
-        {/* Reduced Motion */}
-        <div className="flex items-center justify-between pt-2 border-t border-white/5">
-          <div className="flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-violet-400 shrink-0" />
-            <div>
-              <p className="text-xs font-semibold text-white">Reduced Motion</p>
-              <p className="text-[11px] text-neutral-400">Simplify physics and spring effects</p>
-            </div>
+        {/* Transparency / Opacity Slider */}
+        <div className="space-y-1.5 border-t border-white/[0.06] pt-2.5">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="font-medium text-neutral-300">Background Opacity</span>
+            <span className="font-semibold text-sky-400">
+              {settings.backgroundOpacity ?? 80}%
+            </span>
           </div>
-          <button
-            type="button"
-            onClick={() => updateSettings({ reducedMotionEnabled: !settings.reducedMotionEnabled })}
-            className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-              settings.reducedMotionEnabled ? 'bg-violet-500' : 'bg-neutral-700'
-            }`}
-          >
-            <div
-              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                settings.reducedMotionEnabled ? 'translate-x-5' : 'translate-x-0'
-              }`}
-            />
-          </button>
+          <input
+            type="range"
+            min="20"
+            max="100"
+            step="1"
+            value={settings.backgroundOpacity ?? 80}
+            onChange={(e) =>
+              updateSettings({
+                backgroundOpacity: Number(e.target.value),
+              })
+            }
+            className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-white/10 accent-sky-500"
+            aria-label="Background opacity"
+          />
+          <div className="flex justify-between text-[9px] text-neutral-500">
+            <span>20% (Glass Bening)</span>
+            <span>100% (Solid)</span>
+          </div>
+        </div>
+
+        {/* Blur Slider */}
+        <div className="space-y-1.5 border-t border-white/[0.06] pt-2.5">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="font-medium text-neutral-300">Background Blur</span>
+            <span className="font-semibold text-sky-400">
+              {settings.backgroundBlur ?? 20}px
+            </span>
+          </div>
+          <input
+            type="range"
+            min="0"
+            max="40"
+            step="1"
+            value={settings.backgroundBlur ?? 20}
+            onChange={(e) =>
+              updateSettings({
+                backgroundBlur: Number(e.target.value),
+              })
+            }
+            className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-white/10 accent-sky-500"
+            aria-label="Background blur intensity"
+          />
+          <div className="flex justify-between text-[9px] text-neutral-500">
+            <span>0px (Jernih)</span>
+            <span>40px (Blur Tebal)</span>
+          </div>
         </div>
       </div>
 
-      {/* Notification & Privacy Settings */}
-      <div className="p-3 bg-neutral-900 rounded-2xl border border-white/5 space-y-3">
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400 block">
-          Privacy & Notifications
+      {/* Window & behavior */}
+      <div className="space-y-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3.5">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">
+          Window &amp; Behavior
         </span>
 
-        {/* Hide sensitive content */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <EyeOff className="w-4 h-4 text-amber-400 shrink-0" />
-            <div>
-              <p className="text-xs font-semibold text-white">Hide Message Preview</p>
-              <p className="text-[11px] text-neutral-400">Don't show message text on island</p>
-            </div>
-          </div>
-          <button
-            type="button"
-            onClick={() =>
-              updateSettings({ hideNotificationContent: !settings.hideNotificationContent })
-            }
-            className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors ${
-              settings.hideNotificationContent ? 'bg-amber-500' : 'bg-neutral-700'
-            }`}
-          >
-            <div
-              className={`bg-white w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                settings.hideNotificationContent ? 'translate-x-5' : 'translate-x-0'
-              }`}
-            />
-          </button>
-        </div>
+        <ToggleRow
+          icon={<Monitor className="h-4 w-4 text-sky-400" />}
+          title="Always On Top"
+          description="Keep the island above other windows"
+          checked={settings.alwaysOnTopEnabled}
+          onChange={() =>
+            updateSettings({ alwaysOnTopEnabled: !settings.alwaysOnTopEnabled })
+          }
+          activeClass="bg-sky-500"
+        />
 
-        {/* Display Duration slider */}
-        <div className="pt-2 border-t border-white/5 space-y-1.5">
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-neutral-300 font-medium">Notification Auto-Collapse:</span>
-            <span className="text-sky-400 font-bold">
+        <ToggleRow
+          icon={<Power className="h-4 w-4 text-emerald-400" />}
+          title="Start With Windows"
+          description="Launch automatically on logon"
+          checked={settings.autostartEnabled}
+          onChange={() =>
+            updateSettings({ autostartEnabled: !settings.autostartEnabled })
+          }
+          activeClass="bg-emerald-500"
+        />
+
+        <ToggleRow
+          icon={<Sparkles className="h-4 w-4 text-violet-400" />}
+          title="Reduced Motion"
+          description="Use shorter, simpler transitions"
+          checked={settings.reducedMotionEnabled}
+          onChange={() =>
+            updateSettings({
+              reducedMotionEnabled: !settings.reducedMotionEnabled,
+            })
+          }
+          activeClass="bg-violet-500"
+        />
+      </div>
+
+      {/* Privacy & notifications */}
+      <div className="space-y-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3.5">
+        <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">
+          Privacy &amp; Notifications
+        </span>
+
+        <ToggleRow
+          icon={<EyeOff className="h-4 w-4 text-amber-400" />}
+          title="Hide Message Preview"
+          description="Don't show message text on the island"
+          checked={settings.hideNotificationContent}
+          onChange={() =>
+            updateSettings({
+              hideNotificationContent: !settings.hideNotificationContent,
+            })
+          }
+          activeClass="bg-amber-500"
+        />
+
+        <div className="space-y-1.5 border-t border-white/[0.06] pt-2.5">
+          <div className="flex items-center justify-between text-[11px]">
+            <span className="font-medium text-neutral-300">
+              Notification Auto-Collapse
+            </span>
+            <span className="font-semibold text-sky-400">
               {settings.notificationDisplayDuration || 5}s
             </span>
           </div>
@@ -133,38 +301,51 @@ export const SettingsTab: React.FC = () => {
             step="1"
             value={settings.notificationDisplayDuration || 5}
             onChange={(e) =>
-              updateSettings({ notificationDisplayDuration: Number(e.target.value) })
+              updateSettings({
+                notificationDisplayDuration: Number(e.target.value),
+              })
             }
-            className="w-full h-1.5 bg-neutral-800 rounded-lg appearance-none cursor-pointer accent-sky-500"
+            className="h-1.5 w-full cursor-pointer appearance-none rounded-lg bg-white/10 accent-sky-500"
+            aria-label="Notification auto-collapse duration"
           />
         </div>
       </div>
 
-      {/* Weather Refresh Settings */}
-      <div className="p-3 bg-neutral-900 rounded-2xl border border-white/5 space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <RefreshCw className="w-4 h-4 text-emerald-400 shrink-0" />
-            <p className="text-xs font-semibold text-white">Weather Refresh Interval</p>
+      {/* Weather */}
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3.5">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/[0.04]">
+              <RefreshCw className="h-4 w-4 text-emerald-400" />
+            </span>
+            <div>
+              <p className="text-[12px] font-semibold text-white">
+                Weather Refresh
+              </p>
+              <p className="text-[10px] text-neutral-500">
+                How often forecast data updates
+              </p>
+            </div>
           </div>
+
           <select
             value={settings.weatherRefreshInterval}
             onChange={(e) =>
               updateSettings({ weatherRefreshInterval: Number(e.target.value) })
             }
-            className="bg-neutral-800 text-white border border-white/10 rounded-lg px-2 py-1 text-xs focus:outline-none focus:border-emerald-500"
+            className="rounded-lg border border-white/[0.08] bg-white/[0.05] px-2 py-1 text-[11px] text-white outline-none focus:border-emerald-500/60"
+            aria-label="Weather refresh interval"
           >
-            <option value="5">Every 5 minutes</option>
-            <option value="15">Every 15 minutes</option>
-            <option value="30">Every 30 minutes</option>
-            <option value="60">Every 1 hour</option>
+            <option value="5">5 min</option>
+            <option value="15">15 min</option>
+            <option value="30">30 min</option>
+            <option value="60">1 hour</option>
           </select>
         </div>
       </div>
 
-      {/* App info */}
-      <div className="text-center pt-2 text-[10px] text-neutral-500">
-        Dynamic Island for Windows • v1.0.0 • Native Desktop Utility
+      <div className="pt-1 text-center text-[10px] text-neutral-600">
+        Dynamic Island for Windows • v1.0.0
       </div>
     </div>
   );
