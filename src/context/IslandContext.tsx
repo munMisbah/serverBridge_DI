@@ -379,6 +379,31 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             body: `${text.slice(0, 100)}${text.length > 100 ? '...' : ''} (${char_count} chars)`,
           });
         });
+        listen('tray-open-settings', () => {
+          setState('expanded');
+          setActiveTab('settings');
+        });
+        listen<'hover' | 'click'>('tray-set-interaction', (event) => {
+          updateSettings({ expandTrigger: event.payload });
+        });
+        listen('tray-toggle-always-on-top', () => {
+          setSettings((prev) => {
+            const updated = { ...prev, alwaysOnTopEnabled: !prev.alwaysOnTopEnabled };
+            try {
+              localStorage.setItem('di_settings', JSON.stringify(updated));
+            } catch {}
+            return updated;
+          });
+        });
+        listen('tray-toggle-reduced-motion', () => {
+          setSettings((prev) => {
+            const updated = { ...prev, reducedMotionEnabled: !prev.reducedMotionEnabled };
+            try {
+              localStorage.setItem('di_settings', JSON.stringify(updated));
+            } catch {}
+            return updated;
+          });
+        });
       });
     }
     return () => {

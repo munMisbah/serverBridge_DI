@@ -7,9 +7,9 @@ pub mod window;
 use std::fs::OpenOptions;
 use std::io::Write;
 use tauri::{
-    menu::{Menu, MenuItem},
-    tray::TrayIconBuilder,
-    Manager,
+    menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    Emitter, Manager,
 };
 
 fn log_step(msg: &str) {
@@ -58,40 +58,168 @@ pub fn run() {
                 log_step("ERROR: Main window 'main' not found in app setup!");
             }
 
-            // 2. Setup System Tray Menu (graceful fallback)
+            // 2. Setup System Tray Menu with rich settings dropdown
             let mut tray_holder: Option<tauri::tray::TrayIcon> = None;
             let icon_bytes = include_bytes!("../icons/128x128.png");
             if let Ok(icon) = tauri::image::Image::from_bytes(icon_bytes) {
-                if let (Ok(quit_i), Ok(show_i)) = (
-                    MenuItem::with_id(app, "quit", "Quit Dynamic Island", true, None::<&str>),
-                    MenuItem::with_id(app, "show", "Show Island", true, None::<&str>),
+                let toggle_vis_i = MenuItem::with_id(
+                    app,
+                    "toggle_visibility",
+                    "Hide / Show Dynamic Island",
+                    true,
+                    None::<&str>,
+                )?;
+
+                let open_settings_i = MenuItem::with_id(
+                    app,
+                    "open_settings",
+                    "Settings Dashboard...",
+                    true,
+                    None::<&str>,
+                )?;
+
+                // Submenu: Interaction Mode
+                let mode_hover_i = CheckMenuItem::with_id(
+                    app,
+                    "mode_hover",
+                    "Expand on Hover",
+                    true,
+                    true,
+                    None::<&str>,
+                )?;
+                let mode_click_i = CheckMenuItem::with_id(
+                    app,
+                    "mode_click",
+                    "Expand on Click",
+                    true,
+                    false,
+                    None::<&str>,
+                )?;
+                let interaction_sub = Submenu::with_id_and_items(
+                    app,
+                    "interaction_sub",
+                    "Interaction",
+                    true,
+                    &[&mode_hover_i, &mode_click_i],
+                )?;
+
+                // Submenu: Theme & Window Settings
+                let always_on_top_i = CheckMenuItem::with_id(
+                    app,
+                    "toggle_always_on_top",
+                    "Always on Top",
+                    true,
+                    true,
+                    None::<&str>,
+                )?;
+                let reduced_motion_i = CheckMenuItem::with_id(
+                    app,
+                    "toggle_reduced_motion",
+                    "Reduced Motion",
+                    true,
+                    false,
+                    None::<&str>,
+                )?;
+                let theme_sub = Submenu::with_id_and_items(
+                    app,
+                    "theme_sub",
+                    "Theme & Window",
+                    true,
+                    &[&always_on_top_i, &reduced_motion_i],
+                )?;
+
+                let sep1 = PredefinedMenuItem::separator(app)?;
+                let sep2 = PredefinedMenuItem::separator(app)?;
+
+                let quit_i = MenuItem::with_id(
+                    app,
+                    "quit",
+                    "Exit Dynamic Island",
+                    true,
+                    None::<&str>,
+                )?;
+
+                if let Ok(menu) = Menu::with_items(
+                    app,
+                    &[
+                        &toggle_vis_i,
+                        &open_settings_i,
+                        &sep1,
+                        &interaction_sub,
+                        &theme_sub,
+                        &sep2,
+                        &quit_i,
+                    ],
                 ) {
-                    if let Ok(menu) = Menu::with_items(app, &[&show_i, &quit_i]) {
-                        match TrayIconBuilder::new()
-                            .icon(icon)
-                            .menu(&menu)
-                            .show_menu_on_left_click(true)
-                            .on_menu_event(|app, event| match event.id.as_ref() {
-                                "quit" => {
-                                    app.exit(0);
-                                }
-                                "show" => {
-                                    if let Some(win) = app.get_webview_window("main") {
-                                        let _ = win.show();
-                                        let _ = win.set_focus();
+                    match TrayIconBuilder::new()
+                        .icon(icon)
+                        .tooltip("Dynamic Island for Windows 11")
+                        .menu(&menu)
+                        .show_menu_on_left_click(false)
+                        .on_tray_icon_event(|tray, event| {
+                            if let TrayIconEvent::Click {
+                                button: MouseButton::Left,
+                                button_state: MouseButtonState::Up,
+                                ..
+                            } = event
+                            {
+                                if let Some(win) = tray.app_handle().get_webview_window("main") {
+                                    if let Ok(visible) = win.is_visible() {
+                                        if visible {
+                                            let _ = win.hide();
+                                        } else {
+                                            let _ = win.show();
+                                            let _ = win.set_focus();
+                                        }
                                     }
                                 }
-                                _ => {}
-                            })
-                            .build(app)
-                        {
-                            Ok(tray) => {
-                                log_step("System tray icon registered successfully.");
-                                tray_holder = Some(tray);
                             }
-                            Err(e) => {
-                                log_step(&format!("Warning: Could not create tray icon: {}", e));
+                        })
+                        .on_menu_event(|app, event| match event.id.as_ref() {
+                            "quit" => {
+                                app.exit(0);
                             }
+                            "toggle_visibility" => {
+                                if let Some(win) = app.get_webview_window("main") {
+                                    if let Ok(visible) = win.is_visible() {
+                                        if visible {
+                                            let _ = win.hide();
+                                        } else {
+                                            let _ = win.show();
+                                            let _ = win.set_focus();
+                                        }
+                                    }
+                                }
+                            }
+                            "open_settings" => {
+                                if let Some(win) = app.get_webview_window("main") {
+                                    let _ = win.show();
+                                    let _ = win.set_focus();
+                                    let _ = app.emit("tray-open-settings", ());
+                                }
+                            }
+                            "mode_hover" => {
+                                let _ = app.emit("tray-set-interaction", "hover");
+                            }
+                            "mode_click" => {
+                                let _ = app.emit("tray-set-interaction", "click");
+                            }
+                            "toggle_always_on_top" => {
+                                let _ = app.emit("tray-toggle-always-on-top", ());
+                            }
+                            "toggle_reduced_motion" => {
+                                let _ = app.emit("tray-toggle-reduced-motion", ());
+                            }
+                            _ => {}
+                        })
+                        .build(app)
+                    {
+                        Ok(tray) => {
+                            log_step("System tray icon registered with rich settings dropdown.");
+                            tray_holder = Some(tray);
+                        }
+                        Err(e) => {
+                            log_step(&format!("Warning: Could not create tray icon: {}", e));
                         }
                     }
                 }
