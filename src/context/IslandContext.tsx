@@ -48,7 +48,7 @@ const DEFAULT_SETTINGS: UserSettings = {
   hideNotificationContent: false,
   notificationDisplayDuration: 5, // 5 seconds
   reducedMotionEnabled: false,
-  backgroundOpacity: 80,
+  backgroundOpacity: 85,
   backgroundBlur: 20,
 };
 const DEFAULT_EVENTS: CalendarEvent[] = [

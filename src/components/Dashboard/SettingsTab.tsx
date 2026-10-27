@@ -136,9 +136,9 @@ export const SettingsTab: React.FC = () => {
           <span className="block text-[11px] font-medium text-neutral-300">Preset Kaca</span>
           <div className="mt-1.5 grid grid-cols-4 gap-1">
             {[
-              { label: 'Frosted', opacity: 65, blur: 24 },
-              { label: 'Acrylic', opacity: 80, blur: 20 },
-              { label: 'Deep', opacity: 90, blur: 12 },
+              { label: 'Frosted', opacity: 75, blur: 24 },
+              { label: 'Acrylic', opacity: 85, blur: 20 },
+              { label: 'Deep', opacity: 92, blur: 12 },
               { label: 'OLED', opacity: 100, blur: 0 },
             ].map((preset) => {
               const isSelected =
@@ -176,8 +176,7 @@ export const SettingsTab: React.FC = () => {
             </span>
           </div>
           <input
-            type="range"
-            min="20"
+            min="60"
             max="100"
             step="1"
             value={settings.backgroundOpacity ?? 80}
@@ -190,8 +189,8 @@ export const SettingsTab: React.FC = () => {
             aria-label="Background opacity"
           />
           <div className="flex justify-between text-[9px] text-neutral-500">
-            <span>20% (Glass Bening)</span>
-            <span>100% (Solid)</span>
+            <span>60% (Dark Glass)</span>
+            <span>100% (Solid OLED)</span>
           </div>
         </div>
 
@@ -222,6 +221,10 @@ export const SettingsTab: React.FC = () => {
             <span>40px (Blur Tebal)</span>
           </div>
         </div>
+
+        <p className="text-[10px] leading-relaxed text-neutral-500">
+          Pada desktop Windows, transparansi menggunakan material dark-glass adaptif. Untuk keterbacaan teks terbaik di atas jendela lain, gunakan preset Acrylic (85%) atau OLED (100%).
+        </p>
       </div>
 
       {/* Window & behavior */}
