@@ -153,15 +153,81 @@ export const AppContent: React.FC = () => {
   return (
     <div
       className={`w-screen h-screen relative select-none overflow-hidden transition-colors ${
-        showBackdrop && !isTauri
-          ? 'bg-gradient-to-tr from-[#0a1128] via-[#001f54] to-[#034078]'
-          : 'bg-transparent'
+        showBackdrop && !isTauri ? 'bg-[#08090f]' : 'bg-transparent'
       }`}
     >
-      {/* Windows 11 Bloom aesthetic light effect when backdrop is active */}
+      {/* Abstract Modern Fluid Wallpaper Background */}
       {showBackdrop && !isTauri && (
-        <div className="absolute inset-0 pointer-events-none opacity-40">
-          <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[600px] h-[400px] bg-gradient-to-b from-sky-400/30 to-violet-500/20 blur-3xl rounded-full" />
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          {/* Ambient Radial Color Nebulas */}
+          <div className="absolute -top-32 -left-20 h-[650px] w-[650px] rounded-full bg-gradient-to-br from-violet-600/30 via-indigo-600/20 to-transparent blur-[120px]" />
+          <div className="absolute top-1/4 -right-24 h-[600px] w-[600px] rounded-full bg-gradient-to-bl from-cyan-500/30 via-sky-600/15 to-transparent blur-[110px]" />
+          <div className="absolute -bottom-36 left-1/4 h-[550px] w-[700px] rounded-full bg-gradient-to-t from-fuchsia-600/25 via-rose-500/20 to-transparent blur-[130px]" />
+          <div className="absolute top-1/3 left-1/2 -translate-x-1/2 h-[450px] w-[600px] rounded-full bg-gradient-to-r from-amber-500/15 via-violet-500/20 to-emerald-500/15 blur-[100px]" />
+
+          {/* Abstract Fluid 3D Ribbon / Flowing Curves */}
+          <svg
+            className="absolute inset-0 h-full w-full object-cover opacity-80"
+            viewBox="0 0 1440 900"
+            fill="none"
+            preserveAspectRatio="xMidYMid slice"
+            xmlns="http://www.w3.org/2000/svg"
+          >
+            <defs>
+              <linearGradient id="absGrad1" x1="10%" y1="0%" x2="90%" y2="100%">
+                <stop offset="0%" stopColor="#ec4899" stopOpacity="0.75" />
+                <stop offset="30%" stopColor="#8b5cf6" stopOpacity="0.7" />
+                <stop offset="70%" stopColor="#3b82f6" stopOpacity="0.6" />
+                <stop offset="100%" stopColor="#06b6d4" stopOpacity="0.4" />
+              </linearGradient>
+              <linearGradient id="absGrad2" x1="90%" y1="10%" x2="10%" y2="90%">
+                <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.65" />
+                <stop offset="40%" stopColor="#f43f5e" stopOpacity="0.6" />
+                <stop offset="75%" stopColor="#a855f7" stopOpacity="0.55" />
+                <stop offset="100%" stopColor="#3b82f6" stopOpacity="0.3" />
+              </linearGradient>
+              <linearGradient id="absGrad3" x1="0%" y1="30%" x2="100%" y2="70%">
+                <stop offset="0%" stopColor="#06b6d4" stopOpacity="0.6" />
+                <stop offset="45%" stopColor="#6366f1" stopOpacity="0.65" />
+                <stop offset="85%" stopColor="#d946ef" stopOpacity="0.55" />
+                <stop offset="100%" stopColor="#ec4899" stopOpacity="0.4" />
+              </linearGradient>
+              <filter id="absBlur" x="-30%" y="-30%" width="160%" height="160%">
+                <feGaussianBlur stdDeviation="55" />
+              </filter>
+            </defs>
+
+            {/* Deep flowing curves */}
+            <path
+              d="M-100 450 C 220 280, 480 680, 850 360 C 1180 80, 1380 480, 1600 320 L 1600 1000 L -100 1000 Z"
+              fill="url(#absGrad1)"
+              filter="url(#absBlur)"
+              opacity="0.45"
+            />
+            {/* Dynamic organic abstract ribbon */}
+            <path
+              d="M120 180 C 380 380, 520 120, 780 300 C 1040 480, 1220 220, 1520 380 C 1320 680, 980 520, 720 720 C 460 920, 260 670, 120 760 Z"
+              fill="url(#absGrad2)"
+              filter="url(#absBlur)"
+              opacity="0.5"
+            />
+            {/* Vibrant luminous crest */}
+            <path
+              d="M250 80 C 480 200, 680 240, 800 210 C 980 160, 1150 70, 1320 120 C 1220 380, 960 420, 720 380 C 480 340, 320 260, 250 80 Z"
+              fill="url(#absGrad3)"
+              filter="url(#absBlur)"
+              opacity="0.55"
+            />
+          </svg>
+
+          {/* Minimalist abstract dot grid texture */}
+          <div
+            className="absolute inset-0 opacity-[0.035]"
+            style={{
+              backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.9) 1px, transparent 1px)',
+              backgroundSize: '28px 28px',
+            }}
+          />
         </div>
       )}
 

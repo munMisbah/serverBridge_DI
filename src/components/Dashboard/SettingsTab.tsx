@@ -176,6 +176,7 @@ export const SettingsTab: React.FC = () => {
             </span>
           </div>
           <input
+            type="range"
             min="60"
             max="100"
             step="1"

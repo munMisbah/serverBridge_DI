@@ -213,23 +213,12 @@ export const IslandRoot: React.FC = () => {
           ref={islandRef}
           className="pointer-events-auto relative select-none overflow-hidden text-white"
           style={{
-            backgroundColor:
-              opacity < 1
-                ? `rgba(13, 13, 18, ${Math.max(0.72, opacity)})`
-                : 'rgb(10, 10, 13)',
-            backgroundImage:
-              opacity < 1
-                ? 'linear-gradient(160deg, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0.02) 40%, rgba(0, 0, 0, 0.25) 100%)'
-                : 'none',
-            border:
-              opacity < 1
-                ? '1px solid rgba(255, 255, 255, 0.12)'
-                : '1px solid rgba(255, 255, 255, 0.06)',
+            backgroundColor: `rgba(10, 10, 13, ${opacity})`,
             backdropFilter: blur > 0 ? `blur(${blur}px) saturate(180%)` : 'none',
             WebkitBackdropFilter: blur > 0 ? `blur(${blur}px) saturate(180%)` : 'none',
             boxShadow:
               opacity < 1
-                ? '0 8px 20px -4px rgba(0, 0, 0, 0.55), 0 3px 8px -2px rgba(0, 0, 0, 0.35), inset 0 1px 1px 0 rgba(255, 255, 255, 0.15)'
+                ? '0 8px 20px -4px rgba(0, 0, 0, 0.55), 0 3px 8px -2px rgba(0, 0, 0, 0.35)'
                 : '0 6px 16px -4px rgba(0, 0, 0, 0.5), 0 2px 6px -1px rgba(0, 0, 0, 0.35)',
             willChange: 'width, height, border-radius',
           }}
