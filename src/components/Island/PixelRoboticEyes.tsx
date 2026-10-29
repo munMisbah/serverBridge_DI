@@ -42,36 +42,57 @@ export const PixelRoboticEyes: React.FC<PixelRoboticEyesProps> = ({
     return () => cancelAnimationFrame(animId);
   }, []);
 
-  // Global mouse tracking: eyes look at cursor
+  // Global mouse tracking: eyes look at cursor anywhere on Windows desktop
   useEffect(() => {
-    const handlePointerMove = (e: MouseEvent) => {
+    const updateGazeFromCoord = (coordX: number, coordY: number) => {
       if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
       const eyeCenterX = rect.left + rect.width / 2;
       const eyeCenterY = rect.top + rect.height / 2;
 
-      const deltaX = e.clientX - eyeCenterX;
-      const deltaY = e.clientY - eyeCenterY;
+      const deltaX = coordX - eyeCenterX;
+      const deltaY = coordY - eyeCenterY;
       const distance = Math.hypot(deltaX, deltaY);
 
-      if (distance < 5) {
+      if (distance < 4) {
         targetGazeRef.current = { x: 0, y: 0 };
         return;
       }
 
       // Max gaze offset in pixels
-      const maxOffset = size === 'sm' ? 3 : 4.5;
+      const maxOffset = size === 'sm' ? 3.5 : 5.0;
       const angle = Math.atan2(deltaY, deltaX);
-      const intensity = Math.min(1, distance / 320);
+      const intensity = Math.min(1, Math.max(0.25, distance / 240));
 
       targetGazeRef.current = {
         x: Math.cos(angle) * maxOffset * intensity,
-        y: Math.sin(angle) * (maxOffset * 0.75) * intensity,
+        y: Math.sin(angle) * (maxOffset * 0.8) * intensity,
       };
     };
 
+    let unlisten: (() => void) | undefined;
+
+    // 1. Native Windows global cursor tracking via Tauri event
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      import('@tauri-apps/api/event').then(({ listen }) => {
+        listen<{ x: number; y: number }>('windows-cursor-move', (event) => {
+          updateGazeFromCoord(event.payload.x, event.payload.y);
+        }).then((unlistenFn) => {
+          unlisten = unlistenFn;
+        });
+      });
+    }
+
+    // 2. Web browser preview fallback
+    const handlePointerMove = (e: MouseEvent) => {
+      updateGazeFromCoord(e.clientX, e.clientY);
+    };
+
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
-    return () => window.removeEventListener('pointermove', handlePointerMove);
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      if (unlisten) unlisten();
+    };
   }, [size]);
 
   // Execute a smooth blink transition

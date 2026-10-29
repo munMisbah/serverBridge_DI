@@ -2,12 +2,18 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct HitRect {
     pub x: f64,
     pub y: f64,
     pub width: f64,
     pub height: f64,
+}
+
+#[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
+pub struct CursorPositionPayload {
+    pub x: f64,
+    pub y: f64,
 }
 
 /// Logical island bounds (CSS pixels, relative to the window client area).
@@ -52,12 +58,36 @@ pub fn start_hit_test_loop(app: AppHandle) {
 
     std::thread::spawn(move || {
         let mut hovered = false;
-        // The window starts interactive; the loop applies the correct
-        // click-through state on its first iteration (about 20 ms later).
         let mut ignored = false;
+        let mut last_cursor_x = -9999.0;
+        let mut last_cursor_y = -9999.0;
 
         loop {
-            std::thread::sleep(Duration::from_millis(15));
+            std::thread::sleep(Duration::from_millis(16));
+
+            let Ok(cursor) = window.cursor_position() else {
+                continue;
+            };
+            let Ok(origin) = window.inner_position() else {
+                continue;
+            };
+            let scale = window.scale_factor().unwrap_or(1.0);
+
+            let local_x = (cursor.x - origin.x as f64) / scale;
+            let local_y = (cursor.y - origin.y as f64) / scale;
+
+            // Global Windows cursor tracking for robotic eyes & interactive elements
+            if (cursor.x - last_cursor_x).abs() >= 1.0 || (cursor.y - last_cursor_y).abs() >= 1.0 {
+                last_cursor_x = cursor.x;
+                last_cursor_y = cursor.y;
+                let _ = window.emit(
+                    "windows-cursor-move",
+                    CursorPositionPayload {
+                        x: local_x,
+                        y: local_y,
+                    },
+                );
+            }
 
             let rect = match rect_state.lock() {
                 Ok(guard) => *guard,
@@ -74,19 +104,6 @@ pub fn start_hit_test_loop(app: AppHandle) {
                 continue;
             };
 
-            let Ok(cursor) = window.cursor_position() else {
-                continue;
-            };
-            let Ok(origin) = window.inner_position() else {
-                continue;
-            };
-            let scale = window.scale_factor().unwrap_or(1.0);
-
-            let local_x = (cursor.x - origin.x as f64) / scale;
-            let local_y = (cursor.y - origin.y as f64) / scale;
-
-            // Small hysteresis keeps the cursor exactly on the rounded edge from
-            // rapidly toggling click-through (which forces DWM recomposition).
             let slop = if hovered { 2.0 } else { 0.0 };
             let is_hovered = local_x >= rect.x - slop
                 && local_x < rect.x + rect.width + slop
