@@ -4,6 +4,22 @@ export type IslandStyle = 'pill' | 'notch';
 
 export type ExpandTrigger = 'hover' | 'click';
 
+export type ActiveTab = 'all' | 'weather' | 'calendar' | 'notifications' | 'clipboard' | 'settings';
+
+export type ClipboardItemType = 'text' | 'image';
+
+export interface ClipboardItem {
+  id: string;
+  type: ClipboardItemType;
+  content: string; // Text string or image thumbnail base64 data URL
+  charCount?: number;
+  imageWidth?: number;
+  imageHeight?: number;
+  imagePath?: string; // Path to saved high-res PNG file on disk
+  timestamp: number;
+  isUrl?: boolean;
+}
+
 export interface AppNotification {
   id: string;
   appId: string;
