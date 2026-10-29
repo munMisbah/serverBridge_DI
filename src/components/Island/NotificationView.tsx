@@ -2,7 +2,6 @@ import React from 'react';
 import { X, Bell, Shield, Calendar, Copy, Link as LinkIcon } from 'lucide-react';
 import { useIsland } from '../../context/IslandContext';
 import { AppNotification } from '../../types';
-import { ISLAND_DIMENSIONS } from './dimensions';
 
 interface NotificationViewProps {
   notification: AppNotification;
@@ -77,11 +76,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
 
   return (
     <div
-      className="absolute left-1/2 top-0 flex -translate-x-1/2 cursor-pointer items-center gap-3 px-3.5 text-white"
-      style={{
-        width: ISLAND_DIMENSIONS.notification.width,
-        height: ISLAND_DIMENSIONS.notification.height,
-      }}
+      className="h-full w-full cursor-pointer flex items-center gap-3 px-3.5 text-white"
       onClick={handleClickBody}
       title="Open notification"
     >

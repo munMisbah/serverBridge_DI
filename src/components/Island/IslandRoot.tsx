@@ -9,13 +9,13 @@ import { useIsland } from '../../context/IslandContext';
 import { CompactView } from './CompactView';
 import { NotificationView } from './NotificationView';
 import { ExpandedView } from './ExpandedView';
-import { ISLAND_DIMENSIONS, ISLAND_TOP } from './dimensions';
+import { getIslandDimensions } from './dimensions';
 
-const HOVER_EXPAND_DELAY = 120;
-const HOVER_COLLAPSE_DELAY = 280;
-
+const HOVER_EXPAND_DELAY = 30;
+const HOVER_COLLAPSE_DELAY = 120;
+const NOTCH_EAR_RADIUS = 14;
 export const IslandRoot: React.FC = () => {
-  const { state, setState, activeNotification, settings } = useIsland();
+  const { state, setState, activeNotification, settings, audioPlayback, activeTab } = useIsland();
   const islandRef = useRef<HTMLDivElement>(null);
 
   const hoverExpandTimer = useRef<number | undefined>(undefined);
@@ -27,7 +27,9 @@ export const IslandRoot: React.FC = () => {
   const isTauri =
     typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
-  const dimensions = ISLAND_DIMENSIONS[state];
+  const isPlaying = audioPlayback?.isPlaying ?? false;
+  const islandStyle = settings.islandStyle || 'pill';
+  const dimensions = getIslandDimensions(islandStyle, state, isPlaying, activeTab);
 
   useLayoutEffect(() => {
     stateRef.current = state;
@@ -127,7 +129,7 @@ export const IslandRoot: React.FC = () => {
       .then(({ invoke }) =>
         invoke('set_island_hit_rect', {
           x: state === 'expanded' ? 0 : x,
-          y: state === 'expanded' ? 0 : ISLAND_TOP,
+          y: state === 'expanded' ? 0 : dimensions.top,
           width: state === 'expanded' ? (window.innerWidth || 660) : dimensions.width,
           height: state === 'expanded' ? (window.innerHeight || 420) : dimensions.height,
         })
@@ -135,7 +137,7 @@ export const IslandRoot: React.FC = () => {
       .catch((err) => {
         console.debug('Unable to update island hit rect:', err);
       });
-  }, [dimensions.height, dimensions.width, isTauri, state]);
+  }, [dimensions.height, dimensions.width, dimensions.top, isTauri, state, activeTab]);
 
   // Collapse when clicking outside (browser) or when the Tauri window loses focus.
   useEffect(() => {
@@ -180,17 +182,17 @@ export const IslandRoot: React.FC = () => {
   };
 
   const transition: Transition = settings.reducedMotionEnabled
-    ? { duration: 0.18, ease: 'easeOut' }
+    ? { duration: 0.15, ease: 'easeOut' }
     : {
         type: 'spring',
-        stiffness: 420,
-        damping: 40,
-        mass: 0.85,
+        stiffness: 480,
+        damping: 38,
+        mass: 0.7,
       };
 
   const opacity = (settings.backgroundOpacity ?? 80) / 100;
   const blur = settings.backgroundBlur ?? 20;
-
+  const islandBg = opacity < 1 ? `rgba(0, 0, 0, ${opacity})` : '#000000';
   return (
     <>
       {/* Backdrop overlay for click-outside to collapse when expanded */}
@@ -205,27 +207,17 @@ export const IslandRoot: React.FC = () => {
         />
       )}
 
-      <div
-        className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center"
-        style={{ paddingTop: ISLAND_TOP }}
-      >
+      <div className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center">
         <motion.div
           ref={islandRef}
-          className="pointer-events-auto relative select-none overflow-hidden text-white"
+          className="pointer-events-auto relative select-none text-white"
           style={{
-            backgroundColor: `rgba(10, 10, 13, ${opacity})`,
-            backdropFilter: blur > 0 ? `blur(${blur}px) saturate(180%)` : 'none',
-            WebkitBackdropFilter: blur > 0 ? `blur(${blur}px) saturate(180%)` : 'none',
-            boxShadow:
-              opacity < 1
-                ? '0 8px 20px -4px rgba(0, 0, 0, 0.55), 0 3px 8px -2px rgba(0, 0, 0, 0.35)'
-                : '0 6px 16px -4px rgba(0, 0, 0, 0.5), 0 2px 6px -1px rgba(0, 0, 0, 0.35)',
-            willChange: 'width, height, border-radius',
+            willChange: 'width, height, transform',
           }}
           animate={{
+            y: dimensions.top,
             width: dimensions.width,
             height: dimensions.height,
-            borderRadius: dimensions.borderRadius,
           }}
           transition={transition}
           onClick={handleClick}
@@ -236,23 +228,81 @@ export const IslandRoot: React.FC = () => {
             isTauri ? undefined : () => handleHoverChange(false)
           }
         >
+          {/* Notch Concave Fillet Ears (MacBook / NotchNook style) */}
+          {islandStyle === 'notch' && (
+            <>
+              <div
+                className="pointer-events-none absolute right-[100%] top-0 z-10 block"
+                style={{ width: NOTCH_EAR_RADIUS, height: NOTCH_EAR_RADIUS }}
+              >
+                <svg
+                  width={NOTCH_EAR_RADIUS}
+                  height={NOTCH_EAR_RADIUS}
+                  viewBox={`0 0 ${NOTCH_EAR_RADIUS} ${NOTCH_EAR_RADIUS}`}
+                  fill="none"
+                  className="block"
+                >
+                  <path
+                    d={`M ${NOTCH_EAR_RADIUS} ${NOTCH_EAR_RADIUS} L ${NOTCH_EAR_RADIUS} 0 L 0 0 A ${NOTCH_EAR_RADIUS} ${NOTCH_EAR_RADIUS} 0 0 1 ${NOTCH_EAR_RADIUS} ${NOTCH_EAR_RADIUS} Z`}
+                    fill={islandBg}
+                  />
+                </svg>
+              </div>
 
-          <AnimatePresence initial={false} mode="sync">
-            <motion.div
-              key={state}
-              className="absolute inset-0"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0, pointerEvents: 'none' }}
-              transition={{ duration: settings.reducedMotionEnabled ? 0.12 : 0.18, ease: 'easeOut' }}
-            >
-              {state === 'compact' && <CompactView />}
-              {state === 'notification' && activeNotification && (
-                <NotificationView notification={activeNotification} />
-              )}
-              {state === 'expanded' && <ExpandedView />}
-            </motion.div>
-          </AnimatePresence>
+              <div
+                className="pointer-events-none absolute left-[100%] top-0 z-10 block"
+                style={{ width: NOTCH_EAR_RADIUS, height: NOTCH_EAR_RADIUS }}
+              >
+                <svg
+                  width={NOTCH_EAR_RADIUS}
+                  height={NOTCH_EAR_RADIUS}
+                  viewBox={`0 0 ${NOTCH_EAR_RADIUS} ${NOTCH_EAR_RADIUS}`}
+                  fill="none"
+                  className="block"
+                >
+                  <path
+                    d={`M 0 ${NOTCH_EAR_RADIUS} L 0 0 L ${NOTCH_EAR_RADIUS} 0 A ${NOTCH_EAR_RADIUS} ${NOTCH_EAR_RADIUS} 0 0 0 0 ${NOTCH_EAR_RADIUS} Z`}
+                    fill={islandBg}
+                  />
+                </svg>
+              </div>
+            </>
+          )}
+
+          {/* Island Body Container */}
+          <motion.div
+            className="relative h-full w-full overflow-hidden text-white"
+            style={{
+              backgroundColor: islandBg,
+              backdropFilter: blur > 0 ? `blur(${blur}px) saturate(180%)` : 'none',
+              WebkitBackdropFilter: blur > 0 ? `blur(${blur}px) saturate(180%)` : 'none',
+              boxShadow:
+                opacity < 1
+                  ? '0 8px 20px -4px rgba(0, 0, 0, 0.55), 0 3px 8px -2px rgba(0, 0, 0, 0.35)'
+                  : '0 6px 16px -4px rgba(0, 0, 0, 0.5), 0 2px 6px -1px rgba(0, 0, 0, 0.35)',
+              willChange: 'border-radius',
+            }}
+            animate={{
+              borderRadius: dimensions.borderRadius,
+            }}
+            transition={transition}
+          >
+            <AnimatePresence initial={false} mode="sync">
+              <motion.div
+                key={state}
+                className="absolute inset-0"
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0, pointerEvents: 'none' }}
+                transition={{ duration: settings.reducedMotionEnabled ? 0.12 : 0.18, ease: 'easeOut' }}
+              >
+                {state === 'compact' && <CompactView />}
+                {state === 'notification' && activeNotification && (
+                  <NotificationView notification={activeNotification} />
+                )}
+                {state === 'expanded' && <ExpandedView />}
+              </motion.div>
+            </AnimatePresence>
+          </motion.div>
         </motion.div>
       </div>
     </>

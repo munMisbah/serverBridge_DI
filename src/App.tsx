@@ -8,7 +8,7 @@ const IslandControllerBar: React.FC<{
   showBackdrop: boolean;
   setShowBackdrop: (v: boolean | ((prev: boolean) => boolean)) => void;
 }> = ({ isTauri, showBackdrop, setShowBackdrop }) => {
-  const { setState, pushNotification, setAudioPlayback } = useIsland();
+  const { setState, pushNotification, setAudioPlayback, settings, updateSettings } = useIsland();
   // If running in native Tauri desktop mode, hide the web simulator controls
   if (isTauri) return null;
 
@@ -33,6 +33,20 @@ const IslandControllerBar: React.FC<{
         className="rounded-lg bg-white/[0.05] px-2.5 py-1 text-neutral-300 transition-colors hover:bg-white/[0.09] hover:text-white"
       >
         Expanded
+      </button>
+
+      <button
+        type="button"
+        onClick={() =>
+          updateSettings({
+            islandStyle: settings.islandStyle === 'notch' ? 'pill' : 'notch',
+          })
+        }
+        className="flex items-center gap-1 rounded-lg border border-purple-500/30 bg-purple-500/15 px-2.5 py-1 font-semibold text-purple-200 transition-all hover:bg-purple-500/25 active:scale-95"
+        title="Ganti Style: Pill vs Notch"
+      >
+        <span className="h-1.5 w-1.5 rounded-full bg-purple-400" />
+        <span>{settings.islandStyle === 'notch' ? 'Style: Notch' : 'Style: Pill'}</span>
       </button>
 
       <button

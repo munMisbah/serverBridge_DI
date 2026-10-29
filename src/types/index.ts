@@ -1,5 +1,7 @@
 export type IslandState = 'compact' | 'expanded' | 'notification';
 
+export type IslandStyle = 'pill' | 'notch';
+
 export type ExpandTrigger = 'hover' | 'click';
 
 export interface AppNotification {
@@ -41,6 +43,7 @@ export interface CalendarEvent {
 }
 
 export interface UserSettings {
+  islandStyle: IslandStyle;
   autostartEnabled: boolean;
   alwaysOnTopEnabled: boolean;
   expandTrigger: ExpandTrigger;
@@ -67,4 +70,5 @@ export interface AudioPlaybackState {
   progress: number; // 0 to 1
   duration: number; // in seconds
   sourceApp?: string; // e.g. 'spotify', 'youtube', 'apple', 'soundcloud', etc.
+  coverUrl?: string; // Album artwork URL or image
 }

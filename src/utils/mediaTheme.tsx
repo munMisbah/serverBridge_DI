@@ -23,6 +23,7 @@ export interface MediaTheme {
     title: string;
     artist: string;
     duration: number;
+    coverUrl?: string;
   };
 }
 
@@ -172,6 +173,7 @@ export const MEDIA_THEMES: Record<SupportedMediaApp, MediaTheme> = {
       title: 'Starboy',
       artist: 'The Weeknd, Daft Punk',
       duration: 230,
+      coverUrl: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=160&auto=format&fit=crop&q=80',
     },
   },
   youtube: {
@@ -188,6 +190,7 @@ export const MEDIA_THEMES: Record<SupportedMediaApp, MediaTheme> = {
       title: 'Golden Hour',
       artist: 'JVKE',
       duration: 209,
+      coverUrl: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=160&auto=format&fit=crop&q=80',
     },
   },
   apple: {
@@ -204,6 +207,7 @@ export const MEDIA_THEMES: Record<SupportedMediaApp, MediaTheme> = {
       title: 'Anti-Hero',
       artist: 'Taylor Swift',
       duration: 200,
+      coverUrl: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=160&auto=format&fit=crop&q=80',
     },
   },
   soundcloud: {
