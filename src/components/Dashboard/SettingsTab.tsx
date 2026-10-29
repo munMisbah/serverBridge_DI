@@ -1,15 +1,13 @@
 import React from 'react';
-import {
-  Monitor,
-  EyeOff,
-  Sparkles,
-  RefreshCw,
-  Power,
-  MousePointer2,
-  MousePointerClick,
-  Sliders,
-  Layers,
-} from 'lucide-react';
+import { MonitorIcon } from '@solar-icons/react/bold/monitor';
+import { EyeClosedIcon } from '@solar-icons/react/bold/eye-closed';
+import { StarsIcon } from '@solar-icons/react/bold/stars';
+import { RestartIcon } from '@solar-icons/react/bold/restart';
+import { PowerIcon } from '@solar-icons/react/bold/power';
+import { CursorIcon } from '@solar-icons/react/bold/cursor';
+import { MouseCircleIcon } from '@solar-icons/react/bold/mouse-circle';
+import { TuningIcon } from '@solar-icons/react/bold/tuning';
+import { LayersMinimalisticIcon } from '@solar-icons/react/bold/layers-minimalistic';
 import { useIsland } from '../../context/IslandContext';
 import { ExpandTrigger } from '../../types';
 
@@ -63,10 +61,10 @@ const ToggleRow: React.FC<ToggleRowProps> = ({
 const EXPAND_OPTIONS: {
   id: ExpandTrigger;
   label: string;
-  icon: typeof MousePointer2;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
 }[] = [
-  { id: 'hover', label: 'Hover', icon: MousePointer2 },
-  { id: 'click', label: 'Click', icon: MousePointerClick },
+  { id: 'hover', label: 'Hover', icon: CursorIcon },
+  { id: 'click', label: 'Click', icon: MouseCircleIcon },
 ];
 
 export const SettingsTab: React.FC = () => {
@@ -78,7 +76,7 @@ export const SettingsTab: React.FC = () => {
       <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3.5">
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
-            <Layers className="h-3.5 w-3.5 text-sky-400" />
+            <LayersMinimalisticIcon size={14} className="text-sky-400" />
             Island Style
           </span>
           <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[9px] font-semibold text-neutral-300">
@@ -154,7 +152,7 @@ export const SettingsTab: React.FC = () => {
                     : 'text-neutral-500 hover:text-neutral-200'
                 }`}
               >
-                <Icon className="h-3.5 w-3.5" />
+                <Icon size={14} className="h-3.5 w-3.5" />
                 <span>{option.label}</span>
               </button>
             );
@@ -172,7 +170,7 @@ export const SettingsTab: React.FC = () => {
       <div className="space-y-3.5 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3.5">
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
-            <Sliders className="h-3.5 w-3.5 text-sky-400" />
+            <TuningIcon size={14} className="text-sky-400" />
             Glass Background &amp; Blur
           </span>
           <div
@@ -292,7 +290,7 @@ export const SettingsTab: React.FC = () => {
         </span>
 
         <ToggleRow
-          icon={<Monitor className="h-4 w-4 text-sky-400" />}
+          icon={<MonitorIcon size={16} className="text-sky-400" />}
           title="Always On Top"
           description="Keep the island above other windows"
           checked={settings.alwaysOnTopEnabled}
@@ -303,7 +301,7 @@ export const SettingsTab: React.FC = () => {
         />
 
         <ToggleRow
-          icon={<Power className="h-4 w-4 text-emerald-400" />}
+          icon={<PowerIcon size={16} className="text-emerald-400" />}
           title="Start With Windows"
           description="Launch automatically on logon"
           checked={settings.autostartEnabled}
@@ -314,7 +312,7 @@ export const SettingsTab: React.FC = () => {
         />
 
         <ToggleRow
-          icon={<Sparkles className="h-4 w-4 text-violet-400" />}
+          icon={<StarsIcon size={16} className="text-violet-400" />}
           title="Reduced Motion"
           description="Use shorter, simpler transitions"
           checked={settings.reducedMotionEnabled}
@@ -334,7 +332,7 @@ export const SettingsTab: React.FC = () => {
         </span>
 
         <ToggleRow
-          icon={<EyeOff className="h-4 w-4 text-amber-400" />}
+          icon={<EyeClosedIcon size={16} className="text-amber-400" />}
           title="Hide Message Preview"
           description="Don't show message text on the island"
           checked={settings.hideNotificationContent}
@@ -377,7 +375,7 @@ export const SettingsTab: React.FC = () => {
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/[0.04]">
-              <RefreshCw className="h-4 w-4 text-emerald-400" />
+              <RestartIcon size={16} className="text-emerald-400" />
             </span>
             <div>
               <p className="text-[12px] font-semibold text-white">

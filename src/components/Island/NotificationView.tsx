@@ -1,5 +1,11 @@
 import React from 'react';
-import { X, Bell, Shield, Calendar, Copy, Link as LinkIcon, Camera } from 'lucide-react';
+import { CloseCircleIcon } from '@solar-icons/react/bold/close-circle';
+import { BellIcon } from '@solar-icons/react/bold/bell';
+import { ShieldIcon } from '@solar-icons/react/bold/shield';
+import { CalendarDateIcon } from '@solar-icons/react/bold/calendar-date';
+import { CopyIcon } from '@solar-icons/react/bold/copy';
+import { LinkIcon } from '@solar-icons/react/bold/link';
+import { CameraIcon } from '@solar-icons/react/bold/camera';
 import { useIsland } from '../../context/IslandContext';
 import { AppNotification } from '../../types';
 
@@ -43,7 +49,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
                 className="h-full w-full object-cover"
               />
             ) : (
-              <Camera className="h-4 w-4 text-white" />
+              <CameraIcon size={16} className="text-white" />
             )}
           </div>
         );
@@ -52,9 +58,9 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
       return (
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-cyan-600">
           {isLink ? (
-            <LinkIcon className="h-4 w-4 text-white" />
+            <LinkIcon size={16} className="text-white" />
           ) : (
-            <Copy className="h-4 w-4 text-white" />
+            <CopyIcon size={16} className="text-white" />
           )}
         </div>
       );
@@ -66,7 +72,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
     ) {
       return (
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-blue-600">
-          <Shield className="h-4 w-4 text-white" />
+        <ShieldIcon size={16} className="text-white" />
         </div>
       );
     }
@@ -77,14 +83,14 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
     ) {
       return (
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-600">
-          <Calendar className="h-4 w-4 text-white" />
+        <CalendarDateIcon size={16} className="text-white" />
         </div>
       );
     }
 
     return (
       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.06]">
-        <Bell className="h-4 w-4 text-neutral-300" />
+        <BellIcon size={16} className="text-neutral-300" />
       </div>
     );
   };
@@ -127,7 +133,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
         title="Dismiss notification"
         aria-label="Dismiss notification"
       >
-        <X className="h-3.5 w-3.5" />
+        <CloseCircleIcon size={14} />
       </button>
     </div>
   );

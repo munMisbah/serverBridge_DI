@@ -1,13 +1,11 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  Music,
-  CloudSun,
-  Calendar,
-  Bell,
-  Settings,
-  ClipboardList,
-} from 'lucide-react';
+import { MusicNote2Icon } from '@solar-icons/react/bold/music-note-2';
+import { CloudSun2Icon } from '@solar-icons/react/bold/cloud-sun-2';
+import { CalendarDateIcon } from '@solar-icons/react/bold/calendar-date';
+import { BellIcon } from '@solar-icons/react/bold/bell';
+import { ClipboardListIcon } from '@solar-icons/react/bold/clipboard-list';
+import { SettingsIcon } from '@solar-icons/react/bold/settings';
 import { useIsland } from '../../context/IslandContext';
 import { OverviewTab } from '../Dashboard/OverviewTab';
 import { WeatherTab } from '../Dashboard/WeatherTab';
@@ -19,7 +17,7 @@ import { ActiveTab } from '../../types';
 interface TabItem {
   id: ActiveTab;
   label: string;
-  icon: typeof Music;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
   badge?: boolean;
 }
 
@@ -51,12 +49,12 @@ export const ExpandedView: React.FC = () => {
   }, [setState]);
 
   const tabs: TabItem[] = [
-    { id: 'all', label: 'Music', icon: Music },
-    { id: 'weather', label: 'Weather', icon: CloudSun },
-    { id: 'calendar', label: 'Calendar', icon: Calendar },
-    { id: 'notifications', label: 'Alerts', icon: Bell, badge: unreadCount > 0 },
-    { id: 'clipboard', label: 'Clipboard', icon: ClipboardList },
-    { id: 'settings', label: 'Settings', icon: Settings },
+    { id: 'all', label: 'Music', icon: MusicNote2Icon },
+    { id: 'weather', label: 'Weather', icon: CloudSun2Icon },
+    { id: 'calendar', label: 'Calendar', icon: CalendarDateIcon },
+    { id: 'notifications', label: 'Alerts', icon: BellIcon, badge: unreadCount > 0 },
+    { id: 'clipboard', label: 'Clipboard', icon: ClipboardListIcon },
+    { id: 'settings', label: 'Settings', icon: SettingsIcon },
   ];
 
   const handleSelectTab = (tabId: (typeof TAB_ORDER)[number]) => {
@@ -278,7 +276,7 @@ export const ExpandedView: React.FC = () => {
                           : 'text-neutral-400 hover:text-white hover:bg-white/[0.08]'
                       }`}
                     >
-                      <Icon className="size-3" />
+                      <Icon size={13} className="size-3.5" />
                       {tab.badge && (
                         <span className="absolute -top-0.5 -right-0.5 size-1.5 rounded-full bg-red-500 ring-1 ring-black" />
                       )}

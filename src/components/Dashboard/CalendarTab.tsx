@@ -1,5 +1,11 @@
 import React, { useState } from 'react';
-import { Plus, Trash2, Clock, MapPin, Check, X, Calendar as CalendarIcon } from 'lucide-react';
+import { AddCircleIcon } from '@solar-icons/react/bold/add-circle';
+import { CloseCircleIcon } from '@solar-icons/react/bold/close-circle';
+import { CheckCircleIcon } from '@solar-icons/react/bold/check-circle';
+import { TrashBinTrashIcon } from '@solar-icons/react/bold/trash-bin-trash';
+import { CalendarDateIcon } from '@solar-icons/react/bold/calendar-date';
+import { ClockCircleIcon } from '@solar-icons/react/bold/clock-circle';
+import { MapPointIcon } from '@solar-icons/react/bold/map-point';
 import { useIsland } from '../../context/IslandContext';
 
 export const CalendarTab: React.FC = () => {
@@ -73,7 +79,7 @@ export const CalendarTab: React.FC = () => {
           onClick={() => setIsAdding((v) => !v)}
           className="mt-2 flex w-full items-center justify-center gap-1.5 rounded-full bg-[#007AFF] py-1.5 text-[11px] font-semibold text-white shadow-md transition-all hover:bg-[#0062cc] active:scale-95"
         >
-          {isAdding ? <X className="size-3.5" /> : <Plus className="size-3.5" />}
+          {isAdding ? <CloseCircleIcon size={14} /> : <AddCircleIcon size={14} />}
           <span>{isAdding ? 'Cancel' : 'New Event'}</span>
         </button>
       </div>
@@ -132,14 +138,14 @@ export const CalendarTab: React.FC = () => {
                   type="submit"
                   className="flex items-center gap-1 rounded-full bg-[#007AFF] px-2.5 py-0.5 text-[10px] font-semibold text-white hover:bg-[#0062cc]"
                 >
-                  <Check className="size-3" />
+                  <CheckCircleIcon size={12} />
                   <span>Save</span>
                 </button>
               </div>
             </form>
           ) : events.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center py-4 text-center">
-              <CalendarIcon className="size-5 text-neutral-600 mb-1" />
+              <CalendarDateIcon size={20} className="text-neutral-600 mb-1" />
               <p className="text-[11px] text-neutral-400">No events today</p>
             </div>
           ) : (
@@ -159,12 +165,12 @@ export const CalendarTab: React.FC = () => {
                     </p>
                     <div className="flex items-center gap-2 text-[10px] text-neutral-400">
                       <span className="flex items-center gap-0.5">
-                        <Clock className="size-2.5" />
+                        <ClockCircleIcon size={10} />
                         {formatEventTime(event.startAt)}
                       </span>
                       {event.location && (
                         <span className="flex items-center gap-0.5 truncate text-neutral-500">
-                          <MapPin className="size-2.5" />
+                          <MapPointIcon size={10} />
                           {event.location}
                         </span>
                       )}
@@ -179,7 +185,7 @@ export const CalendarTab: React.FC = () => {
                   title="Delete event"
                   aria-label="Delete event"
                 >
-                  <Trash2 className="size-3" />
+                  <TrashBinTrashIcon size={12} />
                 </button>
               </div>
             ))

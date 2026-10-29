@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Cloud, CloudRain, Sun } from 'lucide-react';
+import { SunIcon } from '@solar-icons/react/bold/sun';
+import { CloudRainIcon } from '@solar-icons/react/bold/cloud-rain';
+import { CloudIcon } from '@solar-icons/react/bold/cloud';
 import { useIsland } from '../../context/IslandContext';
 import { detectMediaApp } from '../../utils/mediaTheme';
 import { PixelRoboticEyes } from './PixelRoboticEyes';
@@ -23,16 +25,16 @@ export const CompactView: React.FC = () => {
   }, []);
 
   const renderWeatherIcon = () => {
-    if (!weather) return <Sun className="h-3.5 w-3.5 text-amber-400" />;
+    if (!weather) return <SunIcon size={14} className="text-amber-400" />;
 
     const code = weather.weatherCode;
     if (code >= 51 && code <= 82) {
-      return <CloudRain className="h-3.5 w-3.5 text-sky-400" />;
+      return <CloudRainIcon size={14} className="text-sky-400" />;
     }
     if (code >= 1 && code <= 3) {
-      return <Cloud className="h-3.5 w-3.5 text-neutral-300" />;
+      return <CloudIcon size={14} className="text-neutral-300" />;
     }
-    return <Sun className="h-3.5 w-3.5 text-amber-400" />;
+    return <SunIcon size={14} className="text-amber-400" />;
   };
 
   return (

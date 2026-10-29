@@ -1,15 +1,13 @@
 import React from 'react';
-import {
-  Sun,
-  Cloud,
-  CloudRain,
-  CloudLightning,
-  Wind,
-  Droplets,
-  Thermometer,
-  RotateCw,
-  MapPin,
-} from 'lucide-react';
+import { SunIcon } from '@solar-icons/react/bold/sun';
+import { CloudIcon } from '@solar-icons/react/bold/cloud';
+import { CloudRainIcon } from '@solar-icons/react/bold/cloud-rain';
+import { CloudStormIcon } from '@solar-icons/react/bold/cloud-storm';
+import { WindIcon } from '@solar-icons/react/bold/wind';
+import { WaterdropsIcon } from '@solar-icons/react/bold/waterdrops';
+import { TemperatureIcon } from '@solar-icons/react/bold/temperature';
+import { RestartIcon } from '@solar-icons/react/bold/restart';
+import { MapPointIcon } from '@solar-icons/react/bold/map-point';
 import { useIsland } from '../../context/IslandContext';
 
 export const WeatherTab: React.FC = () => {
@@ -21,13 +19,13 @@ export const WeatherTab: React.FC = () => {
   } = useIsland();
 
   const getWeatherIcon = () => {
-    if (!weather) return <Sun className="size-6 text-amber-400" />;
+    if (!weather) return <SunIcon size={24} className="text-amber-400" />;
 
     const code = weather.weatherCode;
-    if (code >= 95) return <CloudLightning className="size-6 text-amber-300" />;
-    if (code >= 51 && code <= 82) return <CloudRain className="size-6 text-sky-400" />;
-    if (code >= 1 && code <= 3) return <Cloud className="size-6 text-neutral-300" />;
-    return <Sun className="size-6 text-amber-400" />;
+    if (code >= 95) return <CloudStormIcon size={24} className="text-amber-300" />;
+    if (code >= 51 && code <= 82) return <CloudRainIcon size={24} className="text-sky-400" />;
+    if (code >= 1 && code <= 3) return <CloudIcon size={24} className="text-neutral-300" />;
+    return <SunIcon size={24} className="text-amber-400" />;
   };
 
   return (
@@ -40,7 +38,7 @@ export const WeatherTab: React.FC = () => {
           </div>
           <div className="min-w-0">
             <div className="flex items-center gap-1">
-              <MapPin className="size-3 text-sky-400 shrink-0" />
+              <MapPointIcon size={12} className="text-sky-400 shrink-0" />
               <h2 className="truncate text-[13px] font-semibold text-white leading-tight">
                 {weather?.locationName?.split(',')[0] || settings.weatherLocation.name.split(',')[0]}
               </h2>
@@ -59,7 +57,7 @@ export const WeatherTab: React.FC = () => {
           title="Refresh weather"
           aria-label="Refresh weather"
         >
-          <RotateCw className={`size-3.5 ${weatherLoading ? 'animate-spin' : ''}`} />
+          <RestartIcon size={14} className={weatherLoading ? 'animate-spin' : ''} />
         </button>
       </div>
 
@@ -87,7 +85,7 @@ export const WeatherTab: React.FC = () => {
       <div className="grid grid-cols-3 gap-2 mt-1.5">
         <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.05] border border-white/[0.06] py-1.5 px-1 text-center">
           <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-neutral-400 tracking-wider">
-            <Droplets className="size-2.5 text-sky-400" />
+            <WaterdropsIcon size={11} className="text-sky-400" />
             <span>Humidity</span>
           </div>
           <span className="text-[12.5px] font-bold text-white tabular-nums mt-0.5">
@@ -97,7 +95,7 @@ export const WeatherTab: React.FC = () => {
 
         <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.05] border border-white/[0.06] py-1.5 px-1 text-center">
           <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-neutral-400 tracking-wider">
-            <Wind className="size-2.5 text-teal-400" />
+            <WindIcon size={11} className="text-teal-400" />
             <span>Wind</span>
           </div>
           <span className="text-[12.5px] font-bold text-white tabular-nums mt-0.5">
@@ -108,7 +106,7 @@ export const WeatherTab: React.FC = () => {
 
         <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.05] border border-white/[0.06] py-1.5 px-1 text-center">
           <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-neutral-400 tracking-wider">
-            <Thermometer className="size-2.5 text-amber-400" />
+            <TemperatureIcon size={11} className="text-amber-400" />
             <span>Feels</span>
           </div>
           <span className="text-[12.5px] font-bold text-white tabular-nums mt-0.5">

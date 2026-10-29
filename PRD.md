@@ -329,7 +329,7 @@ Urutan dapat dikonfigurasi pada pengembangan berikutnya.
 - Rounded corners.
 - Animasi spring yang responsif.
 - Ikon sederhana dan konsisten.
-- Typography menggunakan Segoe UI atau font sistem yang sesuai.
+- Typography menggunakan Inter (Google Fonts) atau font sistem yang sesuai.
 - Mendukung reduced motion jika pengguna mengaktifkannya di pengaturan.
 
 ---

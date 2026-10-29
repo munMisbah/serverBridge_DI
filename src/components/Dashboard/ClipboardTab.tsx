@@ -1,14 +1,12 @@
 import React, { useState, useRef } from 'react';
-import {
-  ClipboardList,
-  Check,
-  Trash2,
-  Image as ImageIcon,
-  FileText,
-  Maximize2,
-  Copy,
-  X,
-} from 'lucide-react';
+import { ClipboardListIcon } from '@solar-icons/react/bold/clipboard-list';
+import { CheckCircleIcon } from '@solar-icons/react/bold/check-circle';
+import { TrashBinTrashIcon } from '@solar-icons/react/bold/trash-bin-trash';
+import { GalleryIcon } from '@solar-icons/react/bold/gallery';
+import { FileTextIcon } from '@solar-icons/react/bold/file-text';
+import { MaximizeSquareIcon } from '@solar-icons/react/bold/maximize-square';
+import { CopyIcon } from '@solar-icons/react/bold/copy';
+import { CloseCircleIcon } from '@solar-icons/react/bold/close-circle';
 import { useIsland } from '../../context/IslandContext';
 import { ClipboardItem } from '../../types';
 import fileTextIcon from '../../assets/file-text.svg';
@@ -68,7 +66,7 @@ export const ClipboardTab: React.FC = () => {
       {/* Header Bar: Title + Filter Pills + Clear All */}
       <div className="flex shrink-0 items-center justify-between pt-0.5">
         <div className="flex items-center gap-1.5">
-          <ClipboardList className="h-3.5 w-3.5 text-cyan-400" />
+          <ClipboardListIcon size={14} className="text-cyan-400" />
           <span className="text-[12px] font-semibold tracking-tight text-white/95">
             Clipboard
           </span>
@@ -99,7 +97,7 @@ export const ClipboardTab: React.FC = () => {
                 : 'text-white/60 hover:text-white'
             }`}
           >
-            <FileText className="h-2.5 w-2.5" />
+            <FileTextIcon size={11} />
             <span>Text ({textCount})</span>
           </button>
           <button
@@ -111,7 +109,7 @@ export const ClipboardTab: React.FC = () => {
                 : 'text-white/60 hover:text-white'
             }`}
           >
-            <ImageIcon className="h-2.5 w-2.5" />
+            <GalleryIcon size={11} />
             <span>Screenshots ({imageCount})</span>
           </button>
         </div>
@@ -148,7 +146,7 @@ export const ClipboardTab: React.FC = () => {
                   title="Hapus semua riwayat clipboard"
                   className="flex items-center gap-1 rounded-full bg-white/[0.06] px-2 py-0.5 text-[10px] text-white/70 transition-colors hover:bg-red-500/20 hover:text-red-300"
                 >
-                  <Trash2 className="h-2.5 w-2.5" />
+                  <TrashBinTrashIcon size={11} />
                   <span>Clear All</span>
                 </button>
               )}
@@ -166,7 +164,7 @@ export const ClipboardTab: React.FC = () => {
         {filteredItems.length === 0 ? (
           <div className="flex h-full min-h-[130px] w-full flex-col items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 text-center">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-500/10 text-cyan-400">
-              <ClipboardList className="h-4 w-4" />
+              <ClipboardListIcon size={16} />
             </div>
             <p className="mt-1.5 text-[11px] font-medium text-white/80">
               Belum ada clipboard tersimpan
@@ -197,7 +195,7 @@ export const ClipboardTab: React.FC = () => {
                         title="Perbesar screenshot"
                         className="flex h-5 w-5 items-center justify-center rounded-md bg-white/[0.04] text-white/40 transition-all hover:bg-violet-500/25 hover:text-violet-200"
                       >
-                        <Maximize2 className="h-2.5 w-2.5" />
+                        <MaximizeSquareIcon size={11} />
                       </button>
                     ) : (
                       <span className="text-[8px] font-mono uppercase text-white/20">
@@ -214,7 +212,7 @@ export const ClipboardTab: React.FC = () => {
                       title="Hapus"
                       className="flex h-5 w-5 items-center justify-center rounded-md text-white/30 transition-all hover:bg-red-500/20 hover:text-red-300"
                     >
-                      <Trash2 className="h-2.5 w-2.5" />
+                      <TrashBinTrashIcon size={11} />
                     </button>
                   </div>
 
@@ -246,7 +244,7 @@ export const ClipboardTab: React.FC = () => {
                     {isCopied && (
                       <div className="absolute inset-0 flex items-center justify-center rounded-xl bg-emerald-950/85 border border-emerald-400/50 backdrop-blur-xs">
                         <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-300">
-                          <Check className="h-3 w-3" />
+                          <CheckCircleIcon size={12} />
                           <span>Tersalin!</span>
                         </div>
                       </div>
@@ -306,7 +304,7 @@ export const ClipboardTab: React.FC = () => {
                 onClick={() => setPreviewItem(null)}
                 className="rounded-full bg-white/10 p-1 text-white/70 hover:bg-white/20 hover:text-white"
               >
-                <X className="h-3.5 w-3.5" />
+                <CloseCircleIcon size={14} />
               </button>
             </div>
 
@@ -327,7 +325,7 @@ export const ClipboardTab: React.FC = () => {
                 }}
                 className="flex items-center gap-1.5 rounded-full bg-cyan-600 px-3 py-1 text-[11px] font-semibold text-white shadow hover:bg-cyan-500"
               >
-                <Copy className="h-3.5 w-3.5" />
+                <CopyIcon size={14} />
                 <span>Salin Screenshot</span>
               </button>
               <button
@@ -338,7 +336,7 @@ export const ClipboardTab: React.FC = () => {
                 }}
                 className="flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-[11px] text-red-300 hover:bg-red-500/20"
               >
-                <Trash2 className="h-3 w-3" />
+                <TrashBinTrashIcon size={12} />
                 <span>Hapus</span>
               </button>
             </div>

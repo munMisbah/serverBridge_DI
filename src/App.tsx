@@ -1,7 +1,12 @@
 import React, { useState } from 'react';
 import { IslandProvider, useIsland } from './context/IslandContext';
 import { IslandRoot } from './components/Island/IslandRoot';
-import { MessageSquare, Bell, Image as ImageIcon, Copy, Camera, ClipboardList } from 'lucide-react';
+import { ChatRoundDotsIcon } from '@solar-icons/react/bold/chat-round-dots';
+import { BellIcon } from '@solar-icons/react/bold/bell';
+import { CopyIcon } from '@solar-icons/react/bold/copy';
+import { CameraIcon } from '@solar-icons/react/bold/camera';
+import { ClipboardListIcon } from '@solar-icons/react/bold/clipboard-list';
+import { GalleryIcon } from '@solar-icons/react/bold/gallery';
 
 const IslandControllerBar: React.FC<{
   isTauri: boolean;
@@ -69,7 +74,7 @@ const IslandControllerBar: React.FC<{
         }
         className="flex items-center gap-1 rounded-lg border border-emerald-500/20 bg-emerald-500/10 px-2.5 py-1 text-emerald-300 transition-colors hover:bg-emerald-500/15"
       >
-        <MessageSquare className="h-3 w-3" />
+        <ChatRoundDotsIcon size={12} />
         <span>WhatsApp</span>
       </button>
 
@@ -85,7 +90,7 @@ const IslandControllerBar: React.FC<{
         }
         className="flex items-center gap-1 rounded-lg border border-sky-500/20 bg-sky-500/10 px-2.5 py-1 text-sky-300 transition-colors hover:bg-sky-500/15"
       >
-        <Bell className="h-3 w-3" />
+        <BellIcon size={12} />
         <span>System</span>
       </button>
 
@@ -109,7 +114,7 @@ const IslandControllerBar: React.FC<{
         className="flex items-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/15 px-2.5 py-1 text-cyan-200 transition-colors hover:bg-cyan-500/25"
         title="Simulasikan Copy Text"
       >
-        <Copy className="h-3 w-3" />
+        <CopyIcon size={12} />
         <span>Copy Text</span>
       </button>
 
@@ -134,7 +139,7 @@ const IslandControllerBar: React.FC<{
         className="flex items-center gap-1 rounded-lg border border-violet-500/30 bg-violet-500/15 px-2.5 py-1 text-violet-200 transition-colors hover:bg-violet-500/25"
         title="Simulasikan Screenshot (Win+Shift+S)"
       >
-        <Camera className="h-3 w-3" />
+        <CameraIcon size={12} />
         <span>Screenshot</span>
       </button>
 
@@ -147,7 +152,7 @@ const IslandControllerBar: React.FC<{
         className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.08] px-2.5 py-1 text-white transition-colors hover:bg-white/[0.15]"
         title="Buka Tab Clipboard"
       >
-        <ClipboardList className="h-3 w-3 text-cyan-400" />
+        <ClipboardListIcon size={12} className="text-cyan-400" />
         <span>Open Clipboard</span>
       </button>
 
@@ -220,7 +225,7 @@ const IslandControllerBar: React.FC<{
         className="flex items-center gap-1 rounded-lg bg-white/[0.05] px-2.5 py-1 text-neutral-400 transition-colors hover:bg-white/[0.09] hover:text-white"
         title="Toggle Windows 11 wallpaper simulator backdrop"
       >
-        <ImageIcon className="h-3 w-3" />
+        <GalleryIcon size={12} />
         <span>{showBackdrop ? 'Hide Wallpaper' : 'Show Wallpaper'}</span>
       </button>
     </div>
