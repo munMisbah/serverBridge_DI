@@ -1,3 +1,19 @@
+use tauri::Manager;
+
+#[tauri::command]
+pub fn hide_settings_window(app: tauri::AppHandle) {
+    if let Some(win) = app.get_webview_window("settings") {
+        let _ = win.hide();
+    }
+}
+
+#[tauri::command]
+pub fn minimize_settings_window(app: tauri::AppHandle) {
+    if let Some(win) = app.get_webview_window("settings") {
+        let _ = win.minimize();
+    }
+}
+
 /// Autostart command implementation for Windows
 #[tauri::command]
 pub fn set_autostart_enabled(enabled: bool) -> Result<(), String> {

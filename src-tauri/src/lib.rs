@@ -192,10 +192,12 @@ pub fn run() {
                                 }
                             }
                             "open_settings" => {
-                                if let Some(win) = app.get_webview_window("main") {
+                                if let Some(win) = app.get_webview_window("settings") {
                                     let _ = win.show();
+                                    let _ = win.unminimize();
                                     let _ = win.set_focus();
-                                    let _ = app.emit("tray-open-settings", ());
+                                } else if let Some(main_win) = app.get_webview_window("main") {
+                                    let _ = main_win.emit("tray-open-settings", ());
                                 }
                             }
                             "mode_hover" => {
@@ -256,6 +258,8 @@ pub fn run() {
             notifications::request_notification_permission,
             notifications::start_notification_listener,
             settings::set_autostart_enabled,
+            settings::hide_settings_window,
+            settings::minimize_settings_window,
             media::media_toggle_play_pause,
             media::media_skip_next,
             media::media_skip_prev,

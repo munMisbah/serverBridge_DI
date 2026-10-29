@@ -1,3 +1,4 @@
+import { SettingsWindow } from './components/Settings/SettingsWindow';
 import { SettingsPopup } from './components/Settings/SettingsPopup';
 import { TuningIcon } from '@solar-icons/react/bold/tuning';
 import React, { useState } from 'react';
@@ -334,8 +335,8 @@ export const AppContent: React.FC = () => {
 
       {/* The Dynamic Island itself */}
       <IslandRoot />
-      {/* Standalone Settings Popup */}
-      <SettingsPopup />
+      {/* Standalone Settings Popup (web preview fallback only) */}
+      {!isTauri && <SettingsPopup />}
 
       {/* Simulator bar for browser testing */}
       <IslandControllerBar
@@ -348,6 +349,18 @@ export const AppContent: React.FC = () => {
 };
 
 export default function App() {
+  const isSettingsWindow =
+    typeof window !== 'undefined' &&
+    (window.location.hash === '#settings' || window.location.search.includes('settings'));
+
+  if (isSettingsWindow) {
+    return (
+      <IslandProvider>
+        <SettingsWindow />
+      </IslandProvider>
+    );
+  }
+
   return (
     <IslandProvider>
       <AppContent />

@@ -127,7 +127,7 @@ export const IslandRoot: React.FC = () => {
 
     import('@tauri-apps/api/core')
       .then(({ invoke }) => {
-        const isFullInteractive = state === 'expanded' || isSettingsOpen;
+        const isFullInteractive = state === 'expanded' || (!isTauri && isSettingsOpen);
         return invoke('set_island_hit_rect', {
           x: isFullInteractive ? 0 : x,
           y: isFullInteractive ? 0 : dimensions.top,
