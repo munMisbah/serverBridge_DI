@@ -1,185 +1,118 @@
-import React, { useState } from 'react';
+import React from 'react';
 import {
   Sun,
   Cloud,
   CloudRain,
+  CloudLightning,
   Wind,
   Droplets,
   Thermometer,
   RotateCw,
-  Search,
-  Check,
+  MapPin,
 } from 'lucide-react';
 import { useIsland } from '../../context/IslandContext';
-
-const PRESET_CITIES = [
-  { name: 'Jakarta, Indonesia', latitude: -6.2088, longitude: 106.8456 },
-  { name: 'Surabaya, Indonesia', latitude: -7.2575, longitude: 112.7521 },
-  { name: 'Bandung, Indonesia', latitude: -6.9175, longitude: 107.6191 },
-  { name: 'Denpasar, Bali', latitude: -8.6705, longitude: 115.2126 },
-  { name: 'Singapore', latitude: 1.3521, longitude: 103.8198 },
-  { name: 'Tokyo, Japan', latitude: 35.6762, longitude: 139.6503 },
-  { name: 'London, UK', latitude: 51.5074, longitude: -0.1278 },
-];
 
 export const WeatherTab: React.FC = () => {
   const {
     weather,
     weatherLoading,
-    weatherError,
     refreshWeather,
     settings,
-    updateSettings,
   } = useIsland();
 
-  const [showLocationPicker, setShowLocationPicker] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
-
   const getWeatherIcon = () => {
-    if (!weather) return <Sun className="h-8 w-8 text-amber-400" />;
+    if (!weather) return <Sun className="size-6 text-amber-400" />;
 
     const code = weather.weatherCode;
-    if (code >= 51 && code <= 82) return <CloudRain className="h-8 w-8 text-sky-400" />;
-    if (code >= 1 && code <= 3) return <Cloud className="h-8 w-8 text-neutral-300" />;
-    return <Sun className="h-8 w-8 text-amber-400" />;
-  };
-
-  const filteredCities = PRESET_CITIES.filter((city) =>
-    city.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const handleSelectCity = (city: (typeof PRESET_CITIES)[0]) => {
-    updateSettings({ weatherLocation: city });
-    setShowLocationPicker(false);
+    if (code >= 95) return <CloudLightning className="size-6 text-amber-300" />;
+    if (code >= 51 && code <= 82) return <CloudRain className="size-6 text-sky-400" />;
+    if (code >= 1 && code <= 3) return <Cloud className="size-6 text-neutral-300" />;
+    return <Sun className="size-6 text-amber-400" />;
   };
 
   return (
-    <div className="space-y-2.5">
-      {/* Current weather */}
-      <div className="relative overflow-hidden rounded-2xl border border-white/[0.06] bg-gradient-to-br from-white/[0.05] to-white/[0.02] p-3.5">
-        <div className="flex items-start justify-between gap-3">
+    <div className="flex h-full w-full flex-col justify-between px-5 pt-3.5 pb-2 text-white select-none">
+      {/* Top Header: Location, Condition, and Refresh Button */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-xl bg-white/[0.08] shadow-sm">
+            {getWeatherIcon()}
+          </div>
           <div className="min-w-0">
-            <div className="flex items-center gap-1.5">
-              <span className="truncate text-[12px] font-semibold text-white">
-                {weather?.locationName || settings.weatherLocation.name}
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowLocationPicker((visible) => !visible)}
-                className="shrink-0 text-[10px] font-medium text-sky-400 underline underline-offset-2 transition-colors hover:text-sky-300"
-              >
-                Change
-              </button>
+            <div className="flex items-center gap-1">
+              <MapPin className="size-3 text-sky-400 shrink-0" />
+              <h2 className="truncate text-[13px] font-semibold text-white leading-tight">
+                {weather?.locationName?.split(',')[0] || settings.weatherLocation.name.split(',')[0]}
+              </h2>
             </div>
-            <p className="mt-0.5 text-[10px] text-neutral-400">
-              {weather?.weatherDescription || 'Loading weather data...'}
+            <p className="truncate text-[11px] text-neutral-400 leading-tight mt-0.5">
+              {weather?.weatherDescription || 'Partly cloudy'}
             </p>
           </div>
-
-          <div className="flex shrink-0 items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => refreshWeather()}
-              disabled={weatherLoading}
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-white/[0.05] text-neutral-400 transition-colors hover:bg-white/[0.10] hover:text-white disabled:opacity-50"
-              title="Refresh weather"
-              aria-label="Refresh weather"
-            >
-              <RotateCw
-                className={`h-3.5 w-3.5 ${weatherLoading ? 'animate-spin' : ''}`}
-              />
-            </button>
-            <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.04]">
-              {getWeatherIcon()}
-            </div>
-          </div>
         </div>
 
-        <div className="mt-2.5 flex items-baseline gap-2">
-          <span className="text-4xl font-semibold tracking-tight text-white">
-            {weather ? `${weather.temperature}°` : '--°'}
-          </span>
-          <span className="text-[10px] text-neutral-400">
-            Feels like {weather ? `${weather.feelsLike}°` : '--°'}
-          </span>
-        </div>
-
-        {weatherError && (
-          <p className="mt-2 rounded-lg border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-[10px] text-amber-400/90">
-            Offline cache in use
-          </p>
-        )}
+        <button
+          type="button"
+          onClick={() => refreshWeather()}
+          disabled={weatherLoading}
+          className="flex size-7 items-center justify-center rounded-full bg-white/[0.08] text-neutral-400 transition-colors hover:bg-white/[0.15] hover:text-white disabled:opacity-50"
+          title="Refresh weather"
+          aria-label="Refresh weather"
+        >
+          <RotateCw className={`size-3.5 ${weatherLoading ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
-      {/* Location picker */}
-      {showLocationPicker && (
-        <div className="space-y-2 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3">
-          <div className="relative">
-            <Search className="absolute left-2.5 top-2.5 h-3.5 w-3.5 text-neutral-500" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search city..."
-              className="w-full rounded-xl border border-white/[0.08] bg-white/[0.05] py-1.5 pl-8 pr-3 text-[11px] text-white placeholder-neutral-600 outline-none focus:border-sky-500/50"
-            />
-          </div>
-
-          <div className="max-h-28 space-y-0.5 overflow-y-auto pr-1">
-            {filteredCities.map((city) => {
-              const isSelected = city.name === settings.weatherLocation.name;
-
-              return (
-                <button
-                  key={city.name}
-                  type="button"
-                  onClick={() => handleSelectCity(city)}
-                  className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-[11px] transition-colors ${
-                    isSelected
-                      ? 'bg-sky-500/15 font-semibold text-sky-300'
-                      : 'text-neutral-400 hover:bg-white/[0.05] hover:text-white'
-                  }`}
-                >
-                  <span>{city.name}</span>
-                  {isSelected && <Check className="h-3 w-3 text-sky-400" />}
-                </button>
-              );
-            })}
-          </div>
+      {/* Middle Row: Large Temperature & High/Low / Feels Like */}
+      <div className="flex items-baseline justify-between mt-1">
+        <div className="flex items-baseline gap-1">
+          <span className="text-[34px] font-light tracking-tight text-white leading-none">
+            {weather ? `${weather.temperature}°` : '29°'}
+          </span>
+          <span className="text-xs text-neutral-400 font-medium">C</span>
         </div>
-      )}
-
-      {/* Metrics */}
-      <div className="grid grid-cols-3 gap-2">
-        <div className="flex flex-col items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.03] p-2.5 text-center">
-          <Droplets className="mb-1 h-4 w-4 text-sky-400" />
-          <span className="text-[9px] uppercase tracking-wider text-neutral-500">
-            Humidity
-          </span>
-          <span className="mt-0.5 text-[11px] font-semibold text-white">
-            {weather ? `${weather.humidity}%` : '--'}
-          </span>
-        </div>
-
-        <div className="flex flex-col items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.03] p-2.5 text-center">
-          <Wind className="mb-1 h-4 w-4 text-teal-400" />
-          <span className="text-[9px] uppercase tracking-wider text-neutral-500">
-            Wind
-          </span>
-          <span className="mt-0.5 text-[11px] font-semibold text-white">
-            {weather?.windSpeed !== undefined ? `${weather.windSpeed} km/h` : '--'}
-          </span>
-        </div>
-
-        <div className="flex flex-col items-center justify-center rounded-xl border border-white/[0.06] bg-white/[0.03] p-2.5 text-center">
-          <Thermometer className="mb-1 h-4 w-4 text-amber-400" />
-          <span className="text-[9px] uppercase tracking-wider text-neutral-500">
-            Min / Max
-          </span>
-          <span className="mt-0.5 text-[11px] font-semibold text-white">
+        <div className="text-right text-[11px] text-neutral-400 font-medium leading-tight">
+          <p className="text-white/80">
             {weather?.tempMin !== undefined && weather?.tempMax !== undefined
-              ? `${weather.tempMin}° / ${weather.tempMax}°`
-              : '--'}
+              ? `H: ${weather.tempMax}°  L: ${weather.tempMin}°`
+              : 'H: 33°  L: 24°'}
+          </p>
+          <p className="text-[10px] text-neutral-500 mt-0.5">
+            Feels like {weather ? `${weather.feelsLike}°` : '32°'}
+          </p>
+        </div>
+      </div>
+
+      {/* Bottom Row: 3 iOS Bento Metric Capsules */}
+      <div className="grid grid-cols-3 gap-2 mt-1.5">
+        <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.05] border border-white/[0.06] py-1.5 px-1 text-center">
+          <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-neutral-400 tracking-wider">
+            <Droplets className="size-2.5 text-sky-400" />
+            <span>Humidity</span>
+          </div>
+          <span className="text-[12.5px] font-bold text-white tabular-nums mt-0.5">
+            {weather ? `${weather.humidity}%` : '78%'}
+          </span>
+        </div>
+
+        <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.05] border border-white/[0.06] py-1.5 px-1 text-center">
+          <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-neutral-400 tracking-wider">
+            <Wind className="size-2.5 text-teal-400" />
+            <span>Wind</span>
+          </div>
+          <span className="text-[12.5px] font-bold text-white tabular-nums mt-0.5">
+            {weather?.windSpeed !== undefined ? `${weather.windSpeed}` : '12'}
+            <span className="text-[9.5px] font-normal text-neutral-400 ml-0.5">km/h</span>
+          </span>
+        </div>
+
+        <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.05] border border-white/[0.06] py-1.5 px-1 text-center">
+          <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-neutral-400 tracking-wider">
+            <Thermometer className="size-2.5 text-amber-400" />
+            <span>Feels</span>
+          </div>
+          <span className="text-[12.5px] font-bold text-white tabular-nums mt-0.5">
+            {weather ? `${weather.feelsLike}°` : '32°'}
           </span>
         </div>
       </div>

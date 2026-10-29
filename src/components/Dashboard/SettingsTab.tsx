@@ -8,6 +8,7 @@ import {
   MousePointer2,
   MousePointerClick,
   Sliders,
+  Layers,
 } from 'lucide-react';
 import { useIsland } from '../../context/IslandContext';
 import { ExpandTrigger } from '../../types';
@@ -18,7 +19,7 @@ interface ToggleRowProps {
   description: string;
   checked: boolean;
   onChange: () => void;
-  activeClass: string;
+  activeClass?: string;
 }
 
 const ToggleRow: React.FC<ToggleRowProps> = ({
@@ -27,16 +28,15 @@ const ToggleRow: React.FC<ToggleRowProps> = ({
   description,
   checked,
   onChange,
-  activeClass,
 }) => (
   <div className="flex items-center justify-between gap-3">
     <div className="flex min-w-0 items-center gap-2.5">
-      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-white/[0.04]">
+      <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px] bg-white/[0.08] text-white">
         {icon}
       </span>
       <div className="min-w-0">
-        <p className="text-[12px] font-semibold text-white">{title}</p>
-        <p className="truncate text-[10px] leading-tight text-neutral-500">
+        <p className="text-[12.5px] font-semibold text-white tracking-tight">{title}</p>
+        <p className="truncate text-[10px] leading-tight text-white/50">
           {description}
         </p>
       </div>
@@ -47,13 +47,13 @@ const ToggleRow: React.FC<ToggleRowProps> = ({
       role="switch"
       aria-checked={checked}
       onClick={onChange}
-      className={`relative h-5 w-9 shrink-0 rounded-full p-0.5 transition-colors duration-200 ${
-        checked ? activeClass : 'bg-white/10'
+      className={`relative h-6 w-11 shrink-0 rounded-full p-0.5 transition-colors duration-200 ${
+        checked ? 'bg-[#34C759]' : 'bg-white/20'
       }`}
     >
       <span
-        className={`block h-4 w-4 rounded-full bg-white shadow-sm transition-transform duration-200 ${
-          checked ? 'translate-x-4' : 'translate-x-0'
+        className={`block h-5 w-5 rounded-full bg-white shadow-md transition-transform duration-200 ${
+          checked ? 'translate-x-5' : 'translate-x-0'
         }`}
       />
     </button>
@@ -74,7 +74,64 @@ export const SettingsTab: React.FC = () => {
 
   return (
     <div className="space-y-2.5">
-      {/* Interaction */}
+      {/* Island Style Selector: Pill vs Notch */}
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3.5">
+        <div className="flex items-center justify-between">
+          <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
+            <Layers className="h-3.5 w-3.5 text-sky-400" />
+            Island Style
+          </span>
+          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[9px] font-semibold text-neutral-300">
+            {settings.islandStyle === 'notch' ? 'MacBook Notch' : 'iOS Dynamic Island'}
+          </span>
+        </div>
+
+        <div className="mt-2.5 grid grid-cols-2 gap-2">
+          {/* Pill Option */}
+          <button
+            type="button"
+            onClick={() => updateSettings({ islandStyle: 'pill' })}
+            className={`group relative flex flex-col items-center gap-2 rounded-xl p-3 text-center transition-all duration-200 ${
+              (settings.islandStyle || 'pill') === 'pill'
+                ? 'border border-sky-500/40 bg-sky-500/10 text-white shadow-sm'
+                : 'border border-white/[0.06] bg-white/[0.02] text-neutral-400 hover:bg-white/[0.05] hover:text-white'
+            }`}
+          >
+            {/* Visual Mini Preview: Pill */}
+            <div className="relative flex h-10 w-full items-center justify-center rounded-lg bg-black/40 p-2">
+              <div className="h-3.5 w-16 rounded-full bg-neutral-200 shadow-[0_0_8px_rgba(255,255,255,0.25)]" />
+            </div>
+            <div>
+              <p className="text-[12px] font-semibold text-white">Pill</p>
+              <p className="text-[9px] text-neutral-400">
+                Floating Dynamic Island (iOS)
+              </p>
+            </div>
+          </button>
+
+          {/* Notch Option */}
+          <button
+            type="button"
+            onClick={() => updateSettings({ islandStyle: 'notch' })}
+            className={`group relative flex flex-col items-center gap-2 rounded-xl p-3 text-center transition-all duration-200 ${
+              settings.islandStyle === 'notch'
+                ? 'border border-sky-500/40 bg-sky-500/10 text-white shadow-sm'
+                : 'border border-white/[0.06] bg-white/[0.02] text-neutral-400 hover:bg-white/[0.05] hover:text-white'
+            }`}
+          >
+            {/* Visual Mini Preview: Notch */}
+            <div className="relative flex h-10 w-full items-start justify-center rounded-lg bg-black/40 overflow-hidden">
+              <div className="h-3 w-20 rounded-b-md bg-neutral-200 shadow-[0_2px_8px_rgba(255,255,255,0.25)]" />
+            </div>
+            <div>
+              <p className="text-[12px] font-semibold text-white">Notch</p>
+              <p className="text-[9px] text-neutral-400">
+                Top Bezel Notch (MacBook / NotchNook)
+              </p>
+            </div>
+          </button>
+        </div>
+      </div>
       <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3.5">
         <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">
           Interaction

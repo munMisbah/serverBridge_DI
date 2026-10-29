@@ -33,6 +33,7 @@ interface IslandContextType {
 }
 
 const DEFAULT_SETTINGS: UserSettings = {
+  islandStyle: 'pill',
   autostartEnabled: true,
   alwaysOnTopEnabled: true,
   expandTrigger: 'hover',
@@ -108,15 +109,28 @@ const INITIAL_NOTIFICATIONS: AppNotification[] = [
   },
 ];
 
+const DEFAULT_WEATHER: WeatherData = {
+  locationName: 'Jakarta, Indonesia',
+  temperature: 29,
+  feelsLike: 32,
+  humidity: 78,
+  weatherCode: 2,
+  weatherDescription: 'Partly cloudy',
+  tempMin: 24,
+  tempMax: 33,
+  windSpeed: 12,
+  updatedAt: Date.now(),
+};
+
 const DEFAULT_AUDIO_PLAYBACK: AudioPlaybackState = {
   title: 'Starboy',
   artist: 'The Weeknd, Daft Punk',
-  isPlaying: true,
+  isPlaying: false,
   progress: 0.38,
   duration: 230,
   sourceApp: 'spotify',
+  coverUrl: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=160&auto=format&fit=crop&q=80',
 };
-
 const IslandContext = createContext<IslandContextType | undefined>(undefined);
 
 export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -130,7 +144,14 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   });
   const [activeNotification, setActiveNotification] = useState<AppNotification | null>(null);
-  const [weather, setWeather] = useState<WeatherData | null>(null);
+  const [weather, setWeather] = useState<WeatherData>(() => {
+    try {
+      const cached = localStorage.getItem('di_weather_cache');
+      return cached ? JSON.parse(cached) : DEFAULT_WEATHER;
+    } catch {
+      return DEFAULT_WEATHER;
+    }
+  });
   const [weatherLoading, setWeatherLoading] = useState<boolean>(false);
   const [weatherError, setWeatherError] = useState<string | null>(null);
   const [events, setEvents] = useState<CalendarEvent[]>(() => {

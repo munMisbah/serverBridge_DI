@@ -1,5 +1,5 @@
 import React from 'react';
-import { Trash2, Bell } from 'lucide-react';
+import { Bell, X } from 'lucide-react';
 import { useIsland } from '../../context/IslandContext';
 
 export const NotificationsTab: React.FC = () => {
@@ -18,42 +18,36 @@ export const NotificationsTab: React.FC = () => {
   };
 
   return (
-    <div className="flex h-full flex-col space-y-2.5">
-      {/* Header */}
+    <div className="flex h-full flex-col justify-between space-y-2 select-none">
+      {/* iOS Header */}
       <div className="flex shrink-0 items-center justify-between px-1">
-        <span className="text-[12px] font-semibold tracking-tight text-white">
-          Notification
+        <span className="text-[13px] font-semibold tracking-tight text-white/90">
+          Notification Center
         </span>
 
-        <button
-          type="button"
-          onClick={clearAllNotifications}
-          disabled={notifications.length === 0}
-          title={
-            notifications.length > 0
-              ? 'Clear all notifications'
-              : 'No notifications to clear'
-          }
-          aria-label="Clear all notifications"
-          className={`flex items-center justify-center rounded-lg p-1.5 transition-colors ${
-            notifications.length > 0
-              ? 'text-neutral-400 hover:bg-white/[0.08] hover:text-rose-400'
-              : 'cursor-not-allowed text-neutral-600 opacity-40'
-          }`}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
+        {notifications.length > 0 && (
+          <button
+            type="button"
+            onClick={clearAllNotifications}
+            title="Clear all notifications"
+            aria-label="Clear all notifications"
+            className="rounded-full bg-white/[0.08] px-2.5 py-0.5 text-[10px] font-medium text-white/70 transition-colors hover:bg-white/[0.15] hover:text-white"
+          >
+            Clear All
+          </button>
+        )}
       </div>
-      {/* List */}
+
+      {/* iOS Notifications Stack */}
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
         {notifications.length === 0 ? (
-          <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-4 py-8 text-center">
-            <Bell className="mx-auto mb-2 h-6 w-6 text-neutral-700" />
-            <p className="text-[11px] font-medium text-neutral-400">
-              No notifications
+          <div className="flex h-full flex-col items-center justify-center rounded-[22px] border border-white/[0.08] bg-white/[0.03] p-8 text-center backdrop-blur-xl">
+            <Bell className="mx-auto mb-2 h-7 w-7 text-white/20" />
+            <p className="text-[12px] font-medium text-white/50">
+              No Older Notifications
             </p>
-            <p className="mt-1 text-[10px] text-neutral-600">
-              Windows app notifications will appear here
+            <p className="mt-0.5 text-[10px] text-white/30">
+              Incoming Windows notifications will appear here
             </p>
           </div>
         ) : (
@@ -65,36 +59,37 @@ export const NotificationsTab: React.FC = () => {
             return (
               <div
                 key={notification.id}
-                className="group flex items-start justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.03] p-2.5 transition-colors hover:bg-white/[0.05]"
+                className="group relative flex items-start justify-between gap-3 rounded-[18px] border border-white/[0.08] bg-white/[0.04] p-3 shadow-lg backdrop-blur-xl transition-all hover:bg-white/[0.07]"
               >
                 <div className="flex min-w-0 items-start gap-2.5">
                   <div
-                    className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full ${
-                      isWhatsApp ? 'bg-[#25D366]' : 'border border-white/10 bg-white/[0.05]'
+                    className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[10px] shadow-sm ${
+                      isWhatsApp ? 'bg-[#25D366]' : 'border border-white/10 bg-white/[0.08]'
                     }`}
                   >
                     {isWhatsApp ? (
                       <svg className="h-3.5 w-3.5 fill-white" viewBox="0 0 24 24">
-                        <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766 0-3.18-2.587-5.771-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.299.144.347.491 1.2.534 1.288.043.087.072.188.014.303-.058.116-.087.188-.173.289l-.26.303c-.087.087-.179.182-.077.357.101.174.45 0.744.966 1.204.664.592 1.224.776 1.397.863.174.086.275.072.376-.044.101-.116.433-.506.549-.679.116-.173.231-.144.39-.087s1.011.477 1.184.563c.173.087.289.13.332.202.043.073.043.419-.101.824z" />
+                        <path d="M12.031 6.172c-3.181 0-5.767 2.586-5.768 5.766-.001 1.298.38 2.27 1.019 3.287l-.582 2.128 2.182-.573c.978.58 1.911.928 3.145.929 3.178 0 5.767-2.587 5.768-5.766 0-3.18-2.587-5.771-5.764-5.771zm3.392 8.244c-.144.405-.837.774-1.17.824-.299.045-.677.063-1.092-.069-.252-.08-.575-.187-.988-.365-1.739-.751-2.874-2.502-2.961-2.617-.087-.116-.708-.94-.708-1.793s.448-1.273.607-1.446c.159-.173.346-.217.462-.217l.332.007c.106.005.249-.04.39.299.144.347.491 1.2.534 1.288.043.087.072.188.014.303-.058.116-.087.188-.173.289l-.26.303c-.087.087-.179.182-.077.357.101.174.45.744.966 1.204.664.592 1.224.776 1.397.863.174.086.275.072.376-.044.101-.116.433-.506.549-.679.116-.173.231-.144.39-.087s1.011.477 1.184.563c.173.087.289.13.332.202.043.07.039.14-.029.245-.068.105-.333.506-.333.506s-.202.245-.332.332c-.13.087-.26.043-.39-.043z" />
                       </svg>
                     ) : (
-                      <Bell className="h-3.5 w-3.5 text-neutral-400" />
+                      <Bell className="h-3.5 w-3.5 text-white/70" />
                     )}
                   </div>
 
                   <div className="min-w-0">
                     <div className="flex items-center gap-1.5">
-                      <span className="text-[9px] font-bold uppercase tracking-[0.12em] text-neutral-500">
+                      <span className="text-[10px] font-semibold uppercase tracking-wider text-white/50">
                         {notification.appName}
                       </span>
-                      <span className="text-[9px] text-neutral-600">
+                      <span className="text-[10px] text-white/35">•</span>
+                      <span className="text-[10px] text-white/40">
                         {formatNotificationTime(notification.receivedAt)}
                       </span>
                     </div>
-                    <p className="mt-0.5 truncate text-[11px] font-semibold text-white">
+                    <p className="mt-0.5 truncate text-[12.5px] font-semibold text-white tracking-tight">
                       {notification.title}
                     </p>
-                    <p className="mt-0.5 line-clamp-2 text-[10px] leading-snug text-neutral-400">
+                    <p className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-white/70">
                       {settings.hideNotificationContent
                         ? 'Notification content hidden'
                         : notification.body}
@@ -105,11 +100,11 @@ export const NotificationsTab: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => dismissNotification(notification.id)}
-                  className="shrink-0 rounded-md p-1 text-neutral-600 opacity-0 transition-all hover:bg-rose-500/10 hover:text-rose-400 group-hover:opacity-100"
-                  title="Dismiss"
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white/[0.08] text-white/40 opacity-0 transition-all hover:bg-white/[0.15] hover:text-white group-hover:opacity-100"
+                  title="Dismiss notification"
                   aria-label="Dismiss notification"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <X className="h-3 w-3" />
                 </button>
               </div>
             );

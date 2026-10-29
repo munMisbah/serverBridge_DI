@@ -57,7 +57,7 @@ pub fn start_hit_test_loop(app: AppHandle) {
         let mut ignored = false;
 
         loop {
-            std::thread::sleep(Duration::from_millis(20));
+            std::thread::sleep(Duration::from_millis(15));
 
             let rect = match rect_state.lock() {
                 Ok(guard) => *guard,
