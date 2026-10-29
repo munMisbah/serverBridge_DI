@@ -1,5 +1,5 @@
 import React from 'react';
-import { X, Bell, Shield, Calendar, Copy, Link as LinkIcon } from 'lucide-react';
+import { X, Bell, Shield, Calendar, Copy, Link as LinkIcon, Camera } from 'lucide-react';
 import { useIsland } from '../../context/IslandContext';
 import { AppNotification } from '../../types';
 
@@ -28,7 +28,27 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
     }
 
     if (notification.appId === 'system.clipboard') {
+      const isScreenshot =
+        notification.title.toLowerCase().includes('screenshot') ||
+        notification.title.toLowerCase().includes('tangkapan');
       const isLink = notification.title.toLowerCase().includes('link');
+
+      if (isScreenshot) {
+        return (
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-600 overflow-hidden ring-1 ring-white/10">
+            {notification.icon ? (
+              <img
+                src={notification.icon}
+                alt="Screenshot"
+                className="h-full w-full object-cover"
+              />
+            ) : (
+              <Camera className="h-4 w-4 text-white" />
+            )}
+          </div>
+        );
+      }
+
       return (
         <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-cyan-600">
           {isLink ? (
@@ -70,7 +90,11 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
   };
 
   const handleClickBody = () => {
-    setActiveTab('notifications');
+    if (notification.appId === 'system.clipboard') {
+      setActiveTab('clipboard');
+    } else {
+      setActiveTab('notifications');
+    }
     setState('expanded');
   };
 

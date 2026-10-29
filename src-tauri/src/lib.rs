@@ -260,6 +260,10 @@ pub fn run() {
             media::media_skip_next,
             media::media_skip_prev,
             media::open_notification_settings,
+            clipboard::clipboard_write_text,
+            clipboard::clipboard_write_image,
+            clipboard::clipboard_delete_image_file,
+            clipboard::clipboard_clear_image_cache,
         ])
         .run(tauri::generate_context!());
 

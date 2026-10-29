@@ -1,14 +1,22 @@
 import React, { useState } from 'react';
 import { IslandProvider, useIsland } from './context/IslandContext';
 import { IslandRoot } from './components/Island/IslandRoot';
-import { MessageSquare, Bell, Image as ImageIcon } from 'lucide-react';
+import { MessageSquare, Bell, Image as ImageIcon, Copy, Camera, ClipboardList } from 'lucide-react';
 
 const IslandControllerBar: React.FC<{
   isTauri: boolean;
   showBackdrop: boolean;
   setShowBackdrop: (v: boolean | ((prev: boolean) => boolean)) => void;
 }> = ({ isTauri, showBackdrop, setShowBackdrop }) => {
-  const { setState, pushNotification, setAudioPlayback, settings, updateSettings } = useIsland();
+  const {
+    setState,
+    pushNotification,
+    setAudioPlayback,
+    settings,
+    updateSettings,
+    addClipboardItem,
+    setActiveTab,
+  } = useIsland();
   // If running in native Tauri desktop mode, hide the web simulator controls
   if (isTauri) return null;
 
@@ -79,6 +87,68 @@ const IslandControllerBar: React.FC<{
       >
         <Bell className="h-3 w-3" />
         <span>System</span>
+      </button>
+
+      <div className="mx-0.5 h-4 w-px bg-white/[0.08]" />
+
+      <button
+        type="button"
+        onClick={() => {
+          const text = `Simulated copy: https://github.com/wagydev/di-win #${Math.floor(Math.random() * 900 + 100)}`;
+          addClipboardItem({
+            type: 'text',
+            content: text,
+          });
+          pushNotification({
+            appId: 'system.clipboard',
+            appName: 'Clipboard',
+            title: 'Copied Link',
+            body: `${text} (${text.length} chars)`,
+          });
+        }}
+        className="flex items-center gap-1 rounded-lg border border-cyan-500/30 bg-cyan-500/15 px-2.5 py-1 text-cyan-200 transition-colors hover:bg-cyan-500/25"
+        title="Simulasikan Copy Text"
+      >
+        <Copy className="h-3 w-3" />
+        <span>Copy Text</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          const svgThumb = `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"><defs><linearGradient id="g2" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%23312e81"/><stop offset="100%" stop-color="%230f172a"/></linearGradient></defs><rect width="320" height="180" rx="12" fill="url(%23g2)"/><rect x="20" y="24" width="280" height="30" rx="6" fill="%234338ca" opacity="0.6"/><rect x="20" y="66" width="135" height="90" rx="8" fill="%236366f1" opacity="0.3"/><rect x="165" y="66" width="135" height="90" rx="8" fill="%238b5cf6" opacity="0.3"/><text x="160" y="115" font-family="sans-serif" font-size="12" fill="%23e0e7ff" text-anchor="middle">Screenshot #` + Math.floor(Math.random() * 100) + ` (1920 × 1080)</text></svg>`;
+          addClipboardItem({
+            type: 'image',
+            content: svgThumb,
+            imageWidth: 1920,
+            imageHeight: 1080,
+          });
+          pushNotification({
+            appId: 'system.clipboard',
+            appName: 'Clipboard',
+            title: 'Screenshot Captured',
+            body: 'Tangkapan layar 1920 × 1080 px tersimpan',
+            icon: svgThumb,
+          });
+        }}
+        className="flex items-center gap-1 rounded-lg border border-violet-500/30 bg-violet-500/15 px-2.5 py-1 text-violet-200 transition-colors hover:bg-violet-500/25"
+        title="Simulasikan Screenshot (Win+Shift+S)"
+      >
+        <Camera className="h-3 w-3" />
+        <span>Screenshot</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          setState('expanded');
+          setActiveTab('clipboard');
+        }}
+        className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.08] px-2.5 py-1 text-white transition-colors hover:bg-white/[0.15]"
+        title="Buka Tab Clipboard"
+      >
+        <ClipboardList className="h-3 w-3 text-cyan-400" />
+        <span>Open Clipboard</span>
       </button>
 
       <div className="mx-0.5 h-4 w-px bg-white/[0.08]" />

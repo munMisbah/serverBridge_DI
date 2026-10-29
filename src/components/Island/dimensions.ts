@@ -1,4 +1,4 @@
-import { IslandStyle, IslandState } from '../../types';
+import { IslandStyle, IslandState, ActiveTab } from '../../types';
 
 export interface StyleDimension {
   width: number;
@@ -24,7 +24,7 @@ export const getIslandDimensions = (
   style: IslandStyle = 'pill',
   state: IslandState = 'compact',
   isPlaying: boolean = false,
-  activeTab: 'all' | 'weather' | 'calendar' | 'notifications' | 'settings' = 'all'
+  activeTab: ActiveTab = 'all'
 ): StyleDimension => {
   if (style === 'notch') {
     if (state === 'compact') {
@@ -38,6 +38,8 @@ export const getIslandDimensions = (
           return { width: 480, height: 215, borderRadius: '0px 0px 36px 36px', top: 0 };
         case 'settings':
           return { width: 380, height: 245, borderRadius: '0px 0px 36px 36px', top: 0 };
+        case 'clipboard':
+          return { width: 540, height: 240, borderRadius: '0px 0px 36px 36px', top: 0 };
         case 'notifications':
           return { width: 360, height: 215, borderRadius: '0px 0px 36px 36px', top: 0 };
         case 'weather':
@@ -62,6 +64,8 @@ export const getIslandDimensions = (
         return { width: 480, height: 215, borderRadius: '36px 36px 36px 36px', top: 12 };
       case 'settings':
         return { width: 380, height: 245, borderRadius: '36px 36px 36px 36px', top: 12 };
+      case 'clipboard':
+        return { width: 540, height: 240, borderRadius: '36px 36px 36px 36px', top: 12 };
       case 'notifications':
         return { width: 360, height: 215, borderRadius: '36px 36px 36px 36px', top: 12 };
       case 'weather':

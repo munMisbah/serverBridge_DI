@@ -6,6 +6,8 @@ import {
   CalendarEvent,
   UserSettings,
   AudioPlaybackState,
+  ClipboardItem,
+  ActiveTab,
 } from '../types';
 
 interface IslandContextType {
@@ -28,8 +30,13 @@ interface IslandContextType {
   updateSettings: (settings: Partial<UserSettings>) => void;
   audioPlayback: AudioPlaybackState | null;
   setAudioPlayback: React.Dispatch<React.SetStateAction<AudioPlaybackState | null>>;
-  activeTab: 'all' | 'weather' | 'calendar' | 'notifications' | 'settings';
-  setActiveTab: (tab: 'all' | 'weather' | 'calendar' | 'notifications' | 'settings') => void;
+  activeTab: ActiveTab;
+  setActiveTab: (tab: ActiveTab) => void;
+  clipboardItems: ClipboardItem[];
+  copyClipboardItem: (item: ClipboardItem) => Promise<boolean>;
+  deleteClipboardItem: (id: string) => Promise<void>;
+  clearClipboardHistory: () => Promise<void>;
+  addClipboardItem: (item: Omit<ClipboardItem, 'id' | 'timestamp'> & { id?: string; timestamp?: number }) => void;
 }
 
 const DEFAULT_SETTINGS: UserSettings = {
@@ -131,6 +138,36 @@ const DEFAULT_AUDIO_PLAYBACK: AudioPlaybackState = {
   sourceApp: 'spotify',
   coverUrl: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=160&auto=format&fit=crop&q=80',
 };
+
+const SAMPLE_SCREENSHOT_THUMBNAIL = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%231e293b"/><stop offset="100%" stop-color="%230f172a"/></linearGradient></defs><rect width="320" height="180" rx="12" fill="url(%23g)"/><rect x="20" y="24" width="280" height="28" rx="6" fill="%23334155"/><rect x="20" y="62" width="130" height="94" rx="8" fill="%230284c7" opacity="0.4"/><rect x="160" y="62" width="140" height="94" rx="8" fill="%236366f1" opacity="0.4"/><circle cx="36" cy="38" r="4" fill="%23ef4444"/><circle cx="48" cy="38" r="4" fill="%23eab308"/><circle cx="60" cy="38" r="4" fill="%2322c55e"/><text x="160" y="112" font-family="sans-serif" font-size="12" fill="%2394a3b8" text-anchor="middle">Screenshot Preview (1920 × 1080)</text></svg>';
+
+const INITIAL_CLIPBOARD_ITEMS: ClipboardItem[] = [
+  {
+    id: 'clip-sample-1',
+    type: 'text',
+    content: 'https://github.com/wagydev/dynamic-island-windows',
+    charCount: 47,
+    timestamp: Date.now() - 1000 * 60 * 3,
+    isUrl: true,
+  },
+  {
+    id: 'clip-sample-2',
+    type: 'image',
+    content: SAMPLE_SCREENSHOT_THUMBNAIL,
+    imageWidth: 1920,
+    imageHeight: 1080,
+    timestamp: Date.now() - 1000 * 60 * 12,
+  },
+  {
+    id: 'clip-sample-3',
+    type: 'text',
+    content: 'Windows + Shift + S untuk tangkap screenshot dengan Dynamic Island',
+    charCount: 66,
+    timestamp: Date.now() - 1000 * 60 * 45,
+    isUrl: false,
+  },
+];
+
 const IslandContext = createContext<IslandContextType | undefined>(undefined);
 
 export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -170,7 +207,15 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return DEFAULT_SETTINGS;
     }
   });
-  const [activeTab, setActiveTab] = useState<'all' | 'weather' | 'calendar' | 'notifications' | 'settings'>('all');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('all');
+  const [clipboardItems, setClipboardItems] = useState<ClipboardItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('di_clipboard_history');
+      return saved ? JSON.parse(saved) : INITIAL_CLIPBOARD_ITEMS;
+    } catch {
+      return INITIAL_CLIPBOARD_ITEMS;
+    }
+  });
   const [audioPlayback, setAudioPlayback] = useState<AudioPlaybackState | null>(DEFAULT_AUDIO_PLAYBACK);
   const dismissTimerRef = useRef<number | undefined>(undefined);
   const settingsRef = useRef(settings);
@@ -213,6 +258,15 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       console.error('Failed to persist notifications:', err);
     }
   }, [notifications]);
+
+  // Save clipboard items to local storage
+  useEffect(() => {
+    try {
+      localStorage.setItem('di_clipboard_history', JSON.stringify(clipboardItems));
+    } catch (err) {
+      console.error('Failed to persist clipboard history:', err);
+    }
+  }, [clipboardItems]);
 
   // Weather fetching with Open-Meteo
   const refreshWeather = useCallback(async () => {
@@ -347,6 +401,40 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     },
     []
   );
+  // Clipboard management methods
+  const addClipboardItem = useCallback(
+    (itemData: Omit<ClipboardItem, 'id' | 'timestamp'> & { id?: string; timestamp?: number }) => {
+      setClipboardItems((prev) => {
+        if (
+          itemData.type === 'text' &&
+          prev.length > 0 &&
+          prev[0].type === 'text' &&
+          prev[0].content === itemData.content
+        ) {
+          return prev;
+        }
+        const newItem: ClipboardItem = {
+          id: itemData.id || `clip_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+          type: itemData.type,
+          content: itemData.content,
+          charCount:
+            itemData.charCount ??
+            (itemData.type === 'text' ? itemData.content.length : undefined),
+          imageWidth: itemData.imageWidth,
+          imageHeight: itemData.imageHeight,
+          imagePath: itemData.imagePath,
+          timestamp: itemData.timestamp || Date.now(),
+          isUrl:
+            itemData.type === 'text'
+              ? /^https?:\/\//i.test(itemData.content.trim())
+              : false,
+        };
+        return [newItem, ...prev.filter((i) => i.id !== newItem.id)].slice(0, 50);
+      });
+    },
+    []
+  );
+
   // Listen for native Windows notifications when running in Tauri
   useEffect(() => {
     if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) {
@@ -412,18 +500,55 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
           }),
           listen<{
-            text: string;
-            char_count: number;
-            timestamp: number;
+            id?: string;
+            item_type: 'text' | 'image';
+            text?: string;
+            char_count?: number;
+            thumbnail?: string;
+            image_path?: string;
+            width?: number;
+            height?: number;
+            timestamp?: number;
           }>('windows-clipboard-copied', (event) => {
-            const { text, char_count } = event.payload;
-            const isUrl = /^https?:\/\//i.test(text.trim());
-            pushNotification({
-              appId: 'system.clipboard',
-              appName: 'Clipboard',
-              title: isUrl ? 'Copied Link' : 'Copied to Clipboard',
-              body: `${text.slice(0, 100)}${text.length > 100 ? '...' : ''} (${char_count} chars)`,
-            });
+            const payload = event.payload;
+            if (payload.item_type === 'image' && payload.thumbnail) {
+              addClipboardItem({
+                id: payload.id,
+                type: 'image',
+                content: payload.thumbnail,
+                imageWidth: payload.width,
+                imageHeight: payload.height,
+                imagePath: payload.image_path,
+                timestamp: payload.timestamp,
+              });
+              pushNotification({
+                appId: 'system.clipboard',
+                appName: 'Clipboard',
+                title: 'Screenshot Captured',
+                body:
+                  payload.width && payload.height
+                    ? `Tangkapan layar ${payload.width} × ${payload.height} px tersimpan`
+                    : 'Tangkapan layar tersimpan di clipboard',
+                icon: payload.thumbnail,
+              });
+            } else if (payload.item_type === 'text' && payload.text) {
+              const text = payload.text;
+              const isUrl = /^https?:\/\//i.test(text.trim());
+              addClipboardItem({
+                id: payload.id,
+                type: 'text',
+                content: text,
+                charCount: payload.char_count ?? text.length,
+                timestamp: payload.timestamp,
+                isUrl,
+              });
+              pushNotification({
+                appId: 'system.clipboard',
+                appName: 'Clipboard',
+                title: isUrl ? 'Copied Link' : 'Copied to Clipboard',
+                body: `${text.slice(0, 100)}${text.length > 100 ? '...' : ''} (${payload.char_count ?? text.length} chars)`,
+              });
+            }
           }),
           listen('tray-open-settings', () => {
             setState('expanded');
@@ -518,6 +643,71 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     setEvents((prev) => prev.filter((evt) => evt.id !== id));
   }, []);
 
+  const copyClipboardItem = useCallback(async (item: ClipboardItem): Promise<boolean> => {
+    const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+    try {
+      if (item.type === 'text') {
+        if (isTauri) {
+          const { invoke } = await import('@tauri-apps/api/core');
+          await invoke('clipboard_write_text', { text: item.content });
+        } else if (navigator.clipboard) {
+          await navigator.clipboard.writeText(item.content);
+        }
+        return true;
+      } else if (item.type === 'image') {
+        if (isTauri && item.imagePath) {
+          const { invoke } = await import('@tauri-apps/api/core');
+          await invoke('clipboard_write_image', { imagePath: item.imagePath });
+          return true;
+        } else if (
+          typeof window !== 'undefined' &&
+          navigator.clipboard &&
+          window.ClipboardItem &&
+          item.content.startsWith('data:image/')
+        ) {
+          const res = await fetch(item.content);
+          const blob = await res.blob();
+          await navigator.clipboard.write([
+            new window.ClipboardItem({ [blob.type || 'image/png']: blob }),
+          ]);
+          return true;
+        }
+      }
+      return false;
+    } catch (err) {
+      console.error('Failed to copy clipboard item:', err);
+      return false;
+    }
+  }, []);
+
+  const deleteClipboardItem = useCallback(async (id: string) => {
+    const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+    setClipboardItems((prev) => {
+      const target = prev.find((i) => i.id === id);
+      if (target && target.type === 'image' && target.imagePath && isTauri) {
+        import('@tauri-apps/api/core').then(({ invoke }) => {
+          invoke('clipboard_delete_image_file', { imagePath: target.imagePath }).catch(console.error);
+        });
+      }
+      return prev.filter((i) => i.id !== id);
+    });
+  }, []);
+
+  const clearClipboardHistory = useCallback(async () => {
+    const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+    if (isTauri) {
+      try {
+        const { invoke } = await import('@tauri-apps/api/core');
+        await invoke('clipboard_clear_image_cache');
+      } catch (err) {
+        console.error('Failed to clear clipboard cache:', err);
+      }
+    }
+    setClipboardItems([]);
+    try {
+      localStorage.removeItem('di_clipboard_history');
+    } catch {}
+  }, []);
   return (
     <IslandContext.Provider
       value={{
@@ -542,6 +732,11 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         setAudioPlayback,
         activeTab,
         setActiveTab,
+        clipboardItems,
+        copyClipboardItem,
+        deleteClipboardItem,
+        clearClipboardHistory,
+        addClipboardItem,
       }}
     >
       {children}

@@ -6,6 +6,7 @@ import {
   Calendar,
   Bell,
   Settings,
+  ClipboardList,
 } from 'lucide-react';
 import { useIsland } from '../../context/IslandContext';
 import { OverviewTab } from '../Dashboard/OverviewTab';
@@ -13,19 +14,21 @@ import { WeatherTab } from '../Dashboard/WeatherTab';
 import { CalendarTab } from '../Dashboard/CalendarTab';
 import { NotificationsTab } from '../Dashboard/NotificationsTab';
 import { SettingsTab } from '../Dashboard/SettingsTab';
-
+import { ClipboardTab } from '../Dashboard/ClipboardTab';
+import { ActiveTab } from '../../types';
 interface TabItem {
-  id: 'all' | 'weather' | 'calendar' | 'notifications' | 'settings';
+  id: ActiveTab;
   label: string;
   icon: typeof Music;
   badge?: boolean;
 }
 
-const TAB_ORDER: ('all' | 'weather' | 'calendar' | 'notifications' | 'settings')[] = [
+const TAB_ORDER: ActiveTab[] = [
   'all',
   'weather',
   'calendar',
   'notifications',
+  'clipboard',
   'settings',
 ];
 
@@ -52,6 +55,7 @@ export const ExpandedView: React.FC = () => {
     { id: 'weather', label: 'Weather', icon: CloudSun },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
     { id: 'notifications', label: 'Alerts', icon: Bell, badge: unreadCount > 0 },
+    { id: 'clipboard', label: 'Clipboard', icon: ClipboardList },
     { id: 'settings', label: 'Settings', icon: Settings },
   ];
 
@@ -73,6 +77,16 @@ export const ExpandedView: React.FC = () => {
       const canScrollUp = scrollTop > 2;
       if (e.deltaY > 0 && canScrollDown) return;
       if (e.deltaY < 0 && canScrollUp) return;
+    }
+
+    const scrollableParentX = target?.closest('.overflow-x-auto') as HTMLElement | null;
+    if (scrollableParentX) {
+      const { scrollLeft, scrollWidth, clientWidth } = scrollableParentX;
+      const canScrollRight = scrollLeft + clientWidth < scrollWidth - 2;
+      const canScrollLeft = scrollLeft > 2;
+      const wheelVal = e.deltaY || e.deltaX;
+      if (wheelVal > 0 && canScrollRight) return;
+      if (wheelVal < 0 && canScrollLeft) return;
     }
 
     const now = Date.now();
@@ -139,6 +153,11 @@ export const ExpandedView: React.FC = () => {
             {activeTab === 'notifications' && (
               <div className="h-full w-full overflow-y-auto px-4 py-3">
                 <NotificationsTab />
+              </div>
+            )}
+            {activeTab === 'clipboard' && (
+              <div className="h-full w-full overflow-hidden px-3.5 py-2">
+                <ClipboardTab />
               </div>
             )}
             {activeTab === 'settings' && (
