@@ -5,13 +5,11 @@ import { CloudSun2Icon } from '@solar-icons/react/bold/cloud-sun-2';
 import { CalendarDateIcon } from '@solar-icons/react/bold/calendar-date';
 import { BellIcon } from '@solar-icons/react/bold/bell';
 import { ClipboardListIcon } from '@solar-icons/react/bold/clipboard-list';
-import { SettingsIcon } from '@solar-icons/react/bold/settings';
 import { useIsland } from '../../context/IslandContext';
 import { OverviewTab } from '../Dashboard/OverviewTab';
 import { WeatherTab } from '../Dashboard/WeatherTab';
 import { CalendarTab } from '../Dashboard/CalendarTab';
 import { NotificationsTab } from '../Dashboard/NotificationsTab';
-import { SettingsTab } from '../Dashboard/SettingsTab';
 import { ClipboardTab } from '../Dashboard/ClipboardTab';
 import { ActiveTab } from '../../types';
 interface TabItem {
@@ -27,7 +25,6 @@ const TAB_ORDER: ActiveTab[] = [
   'calendar',
   'notifications',
   'clipboard',
-  'settings',
 ];
 
 export const ExpandedView: React.FC = () => {
@@ -54,7 +51,6 @@ export const ExpandedView: React.FC = () => {
     { id: 'calendar', label: 'Calendar', icon: CalendarDateIcon },
     { id: 'notifications', label: 'Alerts', icon: BellIcon, badge: unreadCount > 0 },
     { id: 'clipboard', label: 'Clipboard', icon: ClipboardListIcon },
-    { id: 'settings', label: 'Settings', icon: SettingsIcon },
   ];
 
   const handleSelectTab = (tabId: (typeof TAB_ORDER)[number]) => {
@@ -156,11 +152,6 @@ export const ExpandedView: React.FC = () => {
             {activeTab === 'clipboard' && (
               <div className="h-full w-full overflow-hidden px-3.5 py-2">
                 <ClipboardTab />
-              </div>
-            )}
-            {activeTab === 'settings' && (
-              <div className="h-full w-full overflow-y-auto px-4 py-3">
-                <SettingsTab />
               </div>
             )}
           </motion.div>

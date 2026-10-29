@@ -4,7 +4,7 @@ export type IslandStyle = 'pill' | 'notch';
 
 export type ExpandTrigger = 'hover' | 'click';
 
-export type ActiveTab = 'all' | 'weather' | 'calendar' | 'notifications' | 'clipboard' | 'settings';
+export type ActiveTab = 'all' | 'weather' | 'calendar' | 'notifications' | 'clipboard';
 
 export type ClipboardItemType = 'text' | 'image';
 

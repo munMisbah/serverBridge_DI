@@ -38,6 +38,8 @@ interface IslandContextType {
   deleteClipboardItem: (id: string) => Promise<void>;
   clearClipboardHistory: () => Promise<void>;
   addClipboardItem: (item: Omit<ClipboardItem, 'id' | 'timestamp'> & { id?: string; timestamp?: number }) => void;
+  isSettingsOpen: boolean;
+  setIsSettingsOpen: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const DEFAULT_SETTINGS: UserSettings = {
@@ -204,6 +206,7 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return DEFAULT_SETTINGS;
     }
   });
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<ActiveTab>('all');
   const [clipboardItems, setClipboardItems] = useState<ClipboardItem[]>(() => {
     try {
@@ -548,8 +551,7 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
             }
           }),
           listen('tray-open-settings', () => {
-            setState('expanded');
-            setActiveTab('settings');
+            setIsSettingsOpen((prev) => !prev);
           }),
           listen<'hover' | 'click'>('tray-set-interaction', (event) => {
             updateSettings({ expandTrigger: event.payload });
@@ -734,6 +736,8 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         deleteClipboardItem,
         clearClipboardHistory,
         addClipboardItem,
+        isSettingsOpen,
+        setIsSettingsOpen,
       }}
     >
       {children}

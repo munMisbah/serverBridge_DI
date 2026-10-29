@@ -1,3 +1,5 @@
+import { SettingsPopup } from './components/Settings/SettingsPopup';
+import { TuningIcon } from '@solar-icons/react/bold/tuning';
 import React, { useState } from 'react';
 import { IslandProvider, useIsland } from './context/IslandContext';
 import { IslandRoot } from './components/Island/IslandRoot';
@@ -21,6 +23,7 @@ const IslandControllerBar: React.FC<{
     updateSettings,
     addClipboardItem,
     setActiveTab,
+    setIsSettingsOpen,
   } = useIsland();
   // If running in native Tauri desktop mode, hide the web simulator controls
   if (isTauri) return null;
@@ -221,6 +224,15 @@ const IslandControllerBar: React.FC<{
       <div className="mx-0.5 h-4 w-px bg-white/[0.08]" />
       <button
         type="button"
+        onClick={() => setIsSettingsOpen((v) => !v)}
+        className="flex items-center gap-1 rounded-lg bg-sky-500/20 text-sky-400 px-2.5 py-1 text-[11px] font-semibold transition-colors hover:bg-sky-500/30"
+        title="Buka Pengaturan Dynamic Island"
+      >
+        <TuningIcon size={12} />
+        <span>Settings</span>
+      </button>
+      <button
+        type="button"
         onClick={() => setShowBackdrop((v: boolean) => !v)}
         className="flex items-center gap-1 rounded-lg bg-white/[0.05] px-2.5 py-1 text-neutral-400 transition-colors hover:bg-white/[0.09] hover:text-white"
         title="Toggle Windows 11 wallpaper simulator backdrop"
@@ -322,6 +334,8 @@ export const AppContent: React.FC = () => {
 
       {/* The Dynamic Island itself */}
       <IslandRoot />
+      {/* Standalone Settings Popup */}
+      <SettingsPopup />
 
       {/* Simulator bar for browser testing */}
       <IslandControllerBar
