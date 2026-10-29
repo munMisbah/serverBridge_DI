@@ -93,30 +93,34 @@ pub fn start_notification_listener(app: AppHandle) -> Result<(), String> {
             };
 
             let mut seen_ids: HashSet<u32> = HashSet::new();
-            let mut logged_status = false;
+            let mut access_granted = false;
+            let mut last_access_check = std::time::Instant::now() - Duration::from_secs(60);
 
             loop {
                 std::thread::sleep(Duration::from_millis(1500));
 
+                // Bound seen_ids memory to prevent gradual collection expansion
+                if seen_ids.len() > 150 {
+                    seen_ids.clear();
+                }
+
                 if let Ok(listener) = UserNotificationListener::Current() {
-                    if let Ok(op) = listener.RequestAccessAsync() {
-                        if let Ok(status) = op.get() {
-                            if !logged_status {
-                                logged_status = true;
-                                let _ = std::fs::OpenOptions::new()
-                                    .create(true)
-                                    .append(true)
-                                    .open("dynamic-island.log")
-                                    .map(|mut f| {
-                                        use std::io::Write;
-                                        let _ = writeln!(f, "[NOTIF] Windows UserNotificationListener Access Status: {:?}", status);
-                                    });
-                            }
-                            if status != UserNotificationListenerAccessStatus::Allowed {
-                                continue;
+                    // Only re-check RequestAccessAsync once on startup or periodically every 30s
+                    // if access is not yet granted, avoiding repeated WinRT COM allocations every 1.5s
+                    if !access_granted {
+                        if last_access_check.elapsed() >= Duration::from_secs(30) {
+                            last_access_check = std::time::Instant::now();
+                            if let Ok(op) = listener.RequestAccessAsync() {
+                                if let Ok(status) = op.get() {
+                                    access_granted = status == UserNotificationListenerAccessStatus::Allowed;
+                                }
                             }
                         }
+                        if !access_granted {
+                            continue;
+                        }
                     }
+
                     if let Ok(notifs_op) = listener.GetNotificationsAsync(NotificationKinds::Toast) {
                         if let Ok(notifs) = notifs_op.get() {
                             let size = notifs.Size().unwrap_or(0);

@@ -61,7 +61,7 @@ pub fn start_hit_test_loop(app: AppHandle) {
         let mut ignored = false;
         let mut last_cursor_x = -9999.0;
         let mut last_cursor_y = -9999.0;
-
+        let mut last_emit_time = std::time::Instant::now();
         loop {
             std::thread::sleep(Duration::from_millis(16));
 
@@ -76,17 +76,24 @@ pub fn start_hit_test_loop(app: AppHandle) {
             let local_x = (cursor.x - origin.x as f64) / scale;
             let local_y = (cursor.y - origin.y as f64) / scale;
 
-            // Global Windows cursor tracking for robotic eyes & interactive elements
-            if (cursor.x - last_cursor_x).abs() >= 1.0 || (cursor.y - last_cursor_y).abs() >= 1.0 {
-                last_cursor_x = cursor.x;
-                last_cursor_y = cursor.y;
-                let _ = window.emit(
-                    "windows-cursor-move",
-                    CursorPositionPayload {
-                        x: local_x,
-                        y: local_y,
-                    },
-                );
+            // Global Windows cursor tracking for robotic eyes:
+            // Throttled to 50ms (~20Hz) and significant delta to prevent IPC flooding & RAM churn
+            let now = std::time::Instant::now();
+            if now.duration_since(last_emit_time) >= Duration::from_millis(50) {
+                let dx = (cursor.x - last_cursor_x).abs();
+                let dy = (cursor.y - last_cursor_y).abs();
+                if dx >= 3.0 || dy >= 3.0 {
+                    last_cursor_x = cursor.x;
+                    last_cursor_y = cursor.y;
+                    last_emit_time = now;
+                    let _ = window.emit(
+                        "windows-cursor-move",
+                        CursorPositionPayload {
+                            x: local_x,
+                            y: local_y,
+                        },
+                    );
+                }
             }
 
             let rect = match rect_state.lock() {

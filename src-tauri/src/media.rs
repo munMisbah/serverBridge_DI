@@ -31,13 +31,19 @@ pub fn start_media_listener(app: AppHandle) {
 
             let mut last_title = String::new();
             let mut last_is_playing = false;
+            let mut manager: Option<GlobalSystemMediaTransportControlsSessionManager> = None;
 
             loop {
                 std::thread::sleep(Duration::from_millis(1000));
 
-                if let Ok(manager_op) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync() {
-                    if let Ok(manager) = manager_op.get() {
-                        if let Ok(session) = manager.GetCurrentSession() {
+                if manager.is_none() {
+                    if let Ok(manager_op) = GlobalSystemMediaTransportControlsSessionManager::RequestAsync() {
+                        manager = manager_op.get().ok();
+                    }
+                }
+
+                if let Some(current_mgr) = &manager {
+                    if let Ok(session) = current_mgr.GetCurrentSession() {
                             let mut is_playing = false;
                             if let Ok(info) = session.GetPlaybackInfo() {
                                 if let Ok(status) = info.PlaybackStatus() {
@@ -112,7 +118,6 @@ pub fn start_media_listener(app: AppHandle) {
                         }
                     }
                 }
-            }
         });
     }
 

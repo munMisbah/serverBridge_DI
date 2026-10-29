@@ -21,25 +21,53 @@ export const PixelRoboticEyes: React.FC<PixelRoboticEyesProps> = ({
   const gazeRef = useRef({ x: 0, y: 0 });
   const targetGazeRef = useRef({ x: 0, y: 0 });
   const [gaze, setGaze] = useState({ x: 0, y: 0 });
+  const isAnimatingRef = useRef(false);
+  const animFrameIdRef = useRef<number | null>(null);
 
-  // Animation frame loop for buttery smooth gaze lerp
-  useEffect(() => {
-    let animId: number;
-    const updateGaze = () => {
+  // Awake-only animation frame loop: runs ONLY while gaze is lerping to target,
+  // and completely sleeps when stationary to eliminate CPU & React render churn.
+  const startGazeAnimation = useCallback(() => {
+    if (isAnimatingRef.current) return;
+    isAnimatingRef.current = true;
+
+    const step = () => {
       const current = gazeRef.current;
       const target = targetGazeRef.current;
 
-      const nextX = current.x + (target.x - current.x) * 0.15;
-      const nextY = current.y + (target.y - current.y) * 0.15;
+      const dx = target.x - current.x;
+      const dy = target.y - current.y;
 
+      // Snap and stop animation loop when close to target
+      if (Math.abs(dx) < 0.05 && Math.abs(dy) < 0.05) {
+        gazeRef.current = { x: target.x, y: target.y };
+        const roundedX = Math.round(target.x * 10) / 10;
+        const roundedY = Math.round(target.y * 10) / 10;
+        setGaze((prev) => (prev.x === roundedX && prev.y === roundedY ? prev : { x: roundedX, y: roundedY }));
+        isAnimatingRef.current = false;
+        animFrameIdRef.current = null;
+        return;
+      }
+
+      const nextX = current.x + dx * 0.15;
+      const nextY = current.y + dy * 0.15;
       gazeRef.current = { x: nextX, y: nextY };
-      setGaze({ x: Math.round(nextX * 10) / 10, y: Math.round(nextY * 10) / 10 });
 
-      animId = requestAnimationFrame(updateGaze);
+      const roundedX = Math.round(nextX * 10) / 10;
+      const roundedY = Math.round(nextY * 10) / 10;
+      setGaze((prev) => (prev.x === roundedX && prev.y === roundedY ? prev : { x: roundedX, y: roundedY }));
+
+      animFrameIdRef.current = requestAnimationFrame(step);
     };
 
-    animId = requestAnimationFrame(updateGaze);
-    return () => cancelAnimationFrame(animId);
+    animFrameIdRef.current = requestAnimationFrame(step);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (animFrameIdRef.current !== null) {
+        cancelAnimationFrame(animFrameIdRef.current);
+      }
+    };
   }, []);
 
   // Global mouse tracking: eyes look at cursor anywhere on Windows desktop
@@ -56,6 +84,7 @@ export const PixelRoboticEyes: React.FC<PixelRoboticEyesProps> = ({
 
       if (distance < 4) {
         targetGazeRef.current = { x: 0, y: 0 };
+        startGazeAnimation();
         return;
       }
 
@@ -68,19 +97,29 @@ export const PixelRoboticEyes: React.FC<PixelRoboticEyesProps> = ({
         x: Math.cos(angle) * maxOffset * intensity,
         y: Math.sin(angle) * (maxOffset * 0.8) * intensity,
       };
+      startGazeAnimation();
     };
 
-    let unlisten: (() => void) | undefined;
+    let cancelled = false;
+    let unlistenFn: (() => void) | undefined;
 
     // 1. Native Windows global cursor tracking via Tauri event
     if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
-      import('@tauri-apps/api/event').then(({ listen }) => {
-        listen<{ x: number; y: number }>('windows-cursor-move', (event) => {
-          updateGazeFromCoord(event.payload.x, event.payload.y);
-        }).then((unlistenFn) => {
-          unlisten = unlistenFn;
-        });
-      });
+      import('@tauri-apps/api/event')
+        .then(({ listen }) => {
+          if (cancelled) return;
+          return listen<{ x: number; y: number }>('windows-cursor-move', (event) => {
+            updateGazeFromCoord(event.payload.x, event.payload.y);
+          });
+        })
+        .then((fn) => {
+          if (cancelled) {
+            fn?.();
+          } else {
+            unlistenFn = fn;
+          }
+        })
+        .catch(() => {});
     }
 
     // 2. Web browser preview fallback
@@ -90,10 +129,11 @@ export const PixelRoboticEyes: React.FC<PixelRoboticEyesProps> = ({
 
     window.addEventListener('pointermove', handlePointerMove, { passive: true });
     return () => {
+      cancelled = true;
       window.removeEventListener('pointermove', handlePointerMove);
-      if (unlisten) unlisten();
+      unlistenFn?.();
     };
-  }, [size]);
+  }, [size, startGazeAnimation]);
 
   // Execute a smooth blink transition
   const triggerBlink = useCallback((isDouble = false) => {

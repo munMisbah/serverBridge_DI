@@ -173,7 +173,16 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const [activeTab, setActiveTab] = useState<'all' | 'weather' | 'calendar' | 'notifications' | 'settings'>('all');
   const [audioPlayback, setAudioPlayback] = useState<AudioPlaybackState | null>(DEFAULT_AUDIO_PLAYBACK);
   const dismissTimerRef = useRef<number | undefined>(undefined);
+  const settingsRef = useRef(settings);
+  useEffect(() => {
+    settingsRef.current = settings;
+  }, [settings]);
 
+  useEffect(() => {
+    return () => {
+      clearTimeout(dismissTimerRef.current);
+    };
+  }, []);
   // Save settings to local storage
   const updateSettings = useCallback((newSettings: Partial<UserSettings>) => {
     setSettings((prev) => {
@@ -295,14 +304,15 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Push new notification
   const pushNotification = useCallback(
     (notifData: Omit<AppNotification, 'id' | 'receivedAt'>) => {
+      const currentSettings = settingsRef.current;
       // Check blocklist
-      if (settings.notificationBlocklist.includes(notifData.appId)) {
+      if (currentSettings.notificationBlocklist.includes(notifData.appId)) {
         return;
       }
       // Check allowlist if configured
       if (
-        settings.notificationAllowlist.length > 0 &&
-        !settings.notificationAllowlist.includes(notifData.appId)
+        currentSettings.notificationAllowlist.length > 0 &&
+        !currentSettings.notificationAllowlist.includes(notifData.appId)
       ) {
         return;
       }
@@ -329,108 +339,134 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       clearTimeout(dismissTimerRef.current);
 
       // Auto dismiss notification state after displayDuration seconds
-      const duration = (settings.notificationDisplayDuration || 5) * 1000;
+      const duration = (currentSettings.notificationDisplayDuration || 5) * 1000;
       dismissTimerRef.current = setTimeout(() => {
         setState((current) => (current === 'notification' ? 'compact' : current));
         setActiveNotification(null);
       }, duration);
     },
-    [settings.notificationAllowlist, settings.notificationBlocklist, settings.notificationDisplayDuration]
+    []
   );
   // Listen for native Windows notifications when running in Tauri
   useEffect(() => {
-    let unlisten: (() => void) | undefined;
-    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
-      import('@tauri-apps/api/event').then(({ listen }) => {
-        listen<{
-          id: string;
-          app_id: string;
-          app_name: string;
-          title: string;
-          body: string;
-          received_at: number;
-        }>('windows-notification', (event) => {
-          const payload = event.payload;
-          pushNotification({
-            appId: payload.app_id,
-            appName: payload.app_name,
-            title: payload.title,
-            body: payload.body,
-          });
-        }).then((unlistenFn) => {
-          unlisten = unlistenFn;
-        });
-        listen<{
-          title: string;
-          artist: string;
-          is_playing: boolean;
-          progress: number;
-          duration: number;
-          source_app?: string;
-        }>('windows-media-change', (event) => {
-          const p = event.payload;
-          if (p.is_playing && p.title) {
-            setAudioPlayback({
-              title: p.title,
-              artist: p.artist || 'Unknown Artist',
-              isPlaying: p.is_playing,
-              progress: p.progress,
-              duration: p.duration,
-              sourceApp: p.source_app,
-            });
-          } else if (!p.is_playing && p.title) {
-            setAudioPlayback((prev) =>
-              prev ? { ...prev, isPlaying: false, title: p.title, artist: p.artist, sourceApp: p.source_app ?? prev.sourceApp } : null
-            );
-          } else {
-            setAudioPlayback(null);
-          }
-        });
-        listen<{
-          text: string;
-          char_count: number;
-          timestamp: number;
-        }>('windows-clipboard-copied', (event) => {
-          const { text, char_count } = event.payload;
-          const isUrl = /^https?:\/\//i.test(text.trim());
-          pushNotification({
-            appId: 'system.clipboard',
-            appName: 'Clipboard',
-            title: isUrl ? 'Copied Link' : 'Copied to Clipboard',
-            body: `${text.slice(0, 100)}${text.length > 100 ? '...' : ''} (${char_count} chars)`,
-          });
-        });
-        listen('tray-open-settings', () => {
-          setState('expanded');
-          setActiveTab('settings');
-        });
-        listen<'hover' | 'click'>('tray-set-interaction', (event) => {
-          updateSettings({ expandTrigger: event.payload });
-        });
-        listen('tray-toggle-always-on-top', () => {
-          setSettings((prev) => {
-            const updated = { ...prev, alwaysOnTopEnabled: !prev.alwaysOnTopEnabled };
-            try {
-              localStorage.setItem('di_settings', JSON.stringify(updated));
-            } catch {}
-            return updated;
-          });
-        });
-        listen('tray-toggle-reduced-motion', () => {
-          setSettings((prev) => {
-            const updated = { ...prev, reducedMotionEnabled: !prev.reducedMotionEnabled };
-            try {
-              localStorage.setItem('di_settings', JSON.stringify(updated));
-            } catch {}
-            return updated;
-          });
-        });
-      });
+    if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) {
+      return;
     }
+
+    let cancelled = false;
+    const cleanups: Array<() => void> = [];
+
+    import('@tauri-apps/api/event')
+      .then(async ({ listen }) => {
+        if (cancelled) return;
+
+        const fns = await Promise.all([
+          listen<{
+            id: string;
+            app_id: string;
+            app_name: string;
+            title: string;
+            body: string;
+            received_at: number;
+          }>('windows-notification', (event) => {
+            const payload = event.payload;
+            pushNotification({
+              appId: payload.app_id,
+              appName: payload.app_name,
+              title: payload.title,
+              body: payload.body,
+            });
+          }),
+          listen<{
+            title: string;
+            artist: string;
+            is_playing: boolean;
+            progress: number;
+            duration: number;
+            source_app?: string;
+          }>('windows-media-change', (event) => {
+            const p = event.payload;
+            if (p.is_playing && p.title) {
+              setAudioPlayback({
+                title: p.title,
+                artist: p.artist || 'Unknown Artist',
+                isPlaying: p.is_playing,
+                progress: p.progress,
+                duration: p.duration,
+                sourceApp: p.source_app,
+              });
+            } else if (!p.is_playing && p.title) {
+              setAudioPlayback((prev) =>
+                prev
+                  ? {
+                      ...prev,
+                      isPlaying: false,
+                      title: p.title,
+                      artist: p.artist,
+                      sourceApp: p.source_app ?? prev.sourceApp,
+                    }
+                  : null
+              );
+            } else {
+              setAudioPlayback(null);
+            }
+          }),
+          listen<{
+            text: string;
+            char_count: number;
+            timestamp: number;
+          }>('windows-clipboard-copied', (event) => {
+            const { text, char_count } = event.payload;
+            const isUrl = /^https?:\/\//i.test(text.trim());
+            pushNotification({
+              appId: 'system.clipboard',
+              appName: 'Clipboard',
+              title: isUrl ? 'Copied Link' : 'Copied to Clipboard',
+              body: `${text.slice(0, 100)}${text.length > 100 ? '...' : ''} (${char_count} chars)`,
+            });
+          }),
+          listen('tray-open-settings', () => {
+            setState('expanded');
+            setActiveTab('settings');
+          }),
+          listen<'hover' | 'click'>('tray-set-interaction', (event) => {
+            updateSettings({ expandTrigger: event.payload });
+          }),
+          listen('tray-toggle-always-on-top', () => {
+            setSettings((prev) => {
+              const updated = { ...prev, alwaysOnTopEnabled: !prev.alwaysOnTopEnabled };
+              try {
+                localStorage.setItem('di_settings', JSON.stringify(updated));
+              } catch {}
+              return updated;
+            });
+          }),
+          listen('tray-toggle-reduced-motion', () => {
+            setSettings((prev) => {
+              const updated = { ...prev, reducedMotionEnabled: !prev.reducedMotionEnabled };
+              try {
+                localStorage.setItem('di_settings', JSON.stringify(updated));
+              } catch {}
+              return updated;
+            });
+          }),
+        ]);
+
+        if (cancelled) {
+          fns.forEach((fn) => fn());
+        } else {
+          cleanups.push(...fns);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to bind Tauri event listeners:', err);
+      });
+
     return () => {
-      if (unlisten) unlisten();
+      cancelled = true;
+      cleanups.forEach((fn) => fn());
     };
-  }, [pushNotification]);
+  }, [pushNotification, updateSettings]);
 
   // Sync settings with native Tauri backend
   useEffect(() => {
