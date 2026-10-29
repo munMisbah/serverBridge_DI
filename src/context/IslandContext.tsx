@@ -1,3 +1,4 @@
+import { DEFAULT_WEATHER_LOCATION } from '../utils/locations';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
   IslandState,
@@ -45,11 +46,7 @@ const DEFAULT_SETTINGS: UserSettings = {
   alwaysOnTopEnabled: true,
   expandTrigger: 'hover',
   targetMonitor: 'primary',
-  weatherLocation: {
-    name: 'Jakarta, Indonesia',
-    latitude: -6.2088,
-    longitude: 106.8456,
-  },
+  weatherLocation: DEFAULT_WEATHER_LOCATION,
   weatherRefreshInterval: 30, // 30 min
   notificationAllowlist: [],
   notificationBlocklist: [],

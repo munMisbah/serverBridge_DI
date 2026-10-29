@@ -8,6 +8,8 @@ import { CursorIcon } from '@solar-icons/react/bold/cursor';
 import { MouseCircleIcon } from '@solar-icons/react/bold/mouse-circle';
 import { TuningIcon } from '@solar-icons/react/bold/tuning';
 import { LayersMinimalisticIcon } from '@solar-icons/react/bold/layers-minimalistic';
+import { MapPointIcon } from '@solar-icons/react/bold/map-point';
+import { INDONESIA_WEATHER_LOCATIONS } from '../../utils/locations';
 import { useIsland } from '../../context/IslandContext';
 import { ExpandTrigger } from '../../types';
 
@@ -369,8 +371,44 @@ export const SettingsTab: React.FC = () => {
       </div>
 
       {/* Weather */}
-      <div className="rounded-2xl bg-neutral-900/90 p-3.5 shadow-sm">
+      <div className="space-y-3 rounded-2xl bg-neutral-900/90 p-3.5 shadow-sm">
+        {/* Weather Location */}
         <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/[0.04]">
+              <MapPointIcon size={16} className="text-sky-400" />
+            </span>
+            <div>
+              <p className="text-[12px] font-semibold text-white">
+                Lokasi Cuaca
+              </p>
+              <p className="text-[10px] text-neutral-500">
+                Pilih kota untuk ramalan cuaca
+              </p>
+            </div>
+          </div>
+
+          <select
+            value={settings.weatherLocation.name}
+            onChange={(e) => {
+              const found = INDONESIA_WEATHER_LOCATIONS.find((loc) => loc.name === e.target.value);
+              if (found) {
+                updateSettings({ weatherLocation: found });
+              }
+            }}
+            className="rounded-lg bg-neutral-800 px-2.5 py-1 text-[11px] text-white outline-none focus:bg-neutral-700"
+            aria-label="Weather location"
+          >
+            {INDONESIA_WEATHER_LOCATIONS.map((loc) => (
+              <option key={loc.name} value={loc.name}>
+                {loc.name}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {/* Weather Refresh */}
+        <div className="flex items-center justify-between gap-3 pt-2.5 border-t border-white/[0.04]">
           <div className="flex items-center gap-2.5">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/[0.04]">
               <RestartIcon size={16} className="text-emerald-400" />
