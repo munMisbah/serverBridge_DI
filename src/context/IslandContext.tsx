@@ -229,6 +229,7 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, []);
   // Save settings to local storage
+  // Save settings to local storage and broadcast to all windows
   const updateSettings = useCallback((newSettings: Partial<UserSettings>) => {
     setSettings((prev) => {
       const updated = { ...prev, ...newSettings };
@@ -237,8 +238,27 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       } catch (err) {
         console.error('Failed to save settings:', err);
       }
+      if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+        import('@tauri-apps/api/event').then(({ emit }) => {
+          emit('sync-settings', updated).catch(console.error);
+        });
+      }
       return updated;
     });
+  }, []);
+
+  // Listen for storage events across webview windows
+  useEffect(() => {
+    const handleStorage = (e: StorageEvent) => {
+      if (e.key === 'di_settings' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          setSettings((prev) => ({ ...prev, ...parsed }));
+        } catch {}
+      }
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
   }, []);
 
   // Save events to local storage
@@ -552,6 +572,9 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           }),
           listen('tray-open-settings', () => {
             setIsSettingsOpen((prev) => !prev);
+          }),
+          listen<Partial<UserSettings>>('sync-settings', (event) => {
+            setSettings((prev) => ({ ...prev, ...event.payload }));
           }),
           listen<'hover' | 'click'>('tray-set-interaction', (event) => {
             updateSettings({ expandTrigger: event.payload });

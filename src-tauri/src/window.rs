@@ -51,6 +51,6 @@ pub fn setup_initial_window_position(window: &WebviewWindow) -> Result<(), Strin
 
     let _ = window.set_always_on_top(true);
     let _ = window.set_resizable(false);
-
+    let _ = window.set_skip_taskbar(true);
     Ok(())
 }

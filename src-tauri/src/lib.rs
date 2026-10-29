@@ -51,11 +51,15 @@ pub fn run() {
                 } else {
                     log_step("Initial window position configured.");
                 }
+                let _ = main_window.set_skip_taskbar(true);
 
                 let _ = main_window.show();
                 log_step("Called main_window.show().");
             } else {
                 log_step("ERROR: Main window 'main' not found in app setup!");
+            }
+            if let Some(settings_window) = app.get_webview_window("settings") {
+                let _ = settings_window.set_skip_taskbar(true);
             }
 
             // 2. Setup System Tray Menu with rich settings dropdown
