@@ -26,7 +26,7 @@ const IslandControllerBar: React.FC<{
   if (isTauri) return null;
 
   return (
-    <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1.5 rounded-2xl border border-white/[0.08] bg-[#09090b]/90 px-3 py-2 text-[11px] text-white shadow-[0_18px_50px_rgba(0,0,0,0.55)] backdrop-blur-xl">
+    <div className="fixed bottom-4 left-1/2 z-40 flex -translate-x-1/2 items-center gap-1.5 rounded-2xl bg-[#0d0e12]/95 px-3 py-2 text-[11px] text-white shadow-[0_18px_50px_rgba(0,0,0,0.85)]">
       <span className="mr-1 flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-neutral-500">
         <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
         Preview
@@ -149,7 +149,7 @@ const IslandControllerBar: React.FC<{
           setState('expanded');
           setActiveTab('clipboard');
         }}
-        className="flex items-center gap-1 rounded-lg border border-white/10 bg-white/[0.08] px-2.5 py-1 text-white transition-colors hover:bg-white/[0.15]"
+        className="flex items-center gap-1 rounded-lg bg-neutral-800 px-2.5 py-1 text-white transition-colors hover:bg-neutral-700"
         title="Buka Tab Clipboard"
       >
         <ClipboardListIcon size={12} className="text-cyan-400" />

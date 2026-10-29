@@ -73,13 +73,13 @@ export const SettingsTab: React.FC = () => {
   return (
     <div className="space-y-2.5">
       {/* Island Style Selector: Pill vs Notch */}
-      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3.5">
+      <div className="rounded-2xl bg-neutral-900/90 p-3.5 shadow-sm">
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
             <LayersMinimalisticIcon size={14} className="text-sky-400" />
             Island Style
           </span>
-          <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[9px] font-semibold text-neutral-300">
+          <span className="rounded-full bg-neutral-800 px-2 py-0.5 text-[9px] font-semibold text-neutral-300">
             {settings.islandStyle === 'notch' ? 'MacBook Notch' : 'iOS Dynamic Island'}
           </span>
         </div>
@@ -92,7 +92,7 @@ export const SettingsTab: React.FC = () => {
             className={`group relative flex flex-col items-center gap-2 rounded-xl p-3 text-center transition-all duration-200 ${
               (settings.islandStyle || 'pill') === 'pill'
                 ? 'border border-sky-500/40 bg-sky-500/10 text-white shadow-sm'
-                : 'border border-white/[0.06] bg-white/[0.02] text-neutral-400 hover:bg-white/[0.05] hover:text-white'
+                : 'bg-neutral-950/60 text-neutral-400 hover:bg-neutral-800/60 hover:text-white'
             }`}
           >
             {/* Visual Mini Preview: Pill */}
@@ -114,7 +114,7 @@ export const SettingsTab: React.FC = () => {
             className={`group relative flex flex-col items-center gap-2 rounded-xl p-3 text-center transition-all duration-200 ${
               settings.islandStyle === 'notch'
                 ? 'border border-sky-500/40 bg-sky-500/10 text-white shadow-sm'
-                : 'border border-white/[0.06] bg-white/[0.02] text-neutral-400 hover:bg-white/[0.05] hover:text-white'
+                : 'bg-neutral-950/60 text-neutral-400 hover:bg-neutral-800/60 hover:text-white'
             }`}
           >
             {/* Visual Mini Preview: Notch */}
@@ -130,12 +130,12 @@ export const SettingsTab: React.FC = () => {
           </button>
         </div>
       </div>
-      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3.5">
+      <div className="rounded-2xl bg-neutral-900/90 p-3.5 shadow-sm">
         <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">
           Interaction
         </span>
 
-        <div className="mt-2.5 grid grid-cols-2 gap-1 rounded-xl border border-white/[0.06] bg-black/20 p-1">
+        <div className="mt-2.5 grid grid-cols-2 gap-1 rounded-xl bg-neutral-950/80 p-1">
           {EXPAND_OPTIONS.map((option) => {
             const Icon = option.icon;
             const isActive = settings.expandTrigger === option.id;
@@ -167,17 +167,15 @@ export const SettingsTab: React.FC = () => {
       </div>
 
       {/* Background Transparency & Blur (Efek Glass) */}
-      <div className="space-y-3.5 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3.5">
+      <div className="space-y-3.5 rounded-2xl bg-neutral-900/90 p-3.5 shadow-sm">
         <div className="flex items-center justify-between">
           <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
             <TuningIcon size={14} className="text-sky-400" />
             Glass Background &amp; Blur
           </span>
           <div
-            className="flex items-center gap-1.5 rounded-lg border px-2 py-0.5 text-[10px] font-medium"
+            className="flex items-center gap-1.5 rounded-lg px-2 py-0.5 text-[10px] font-medium bg-neutral-800"
             style={{
-              backgroundColor: `rgba(255, 255, 255, ${(100 - (settings.backgroundOpacity ?? 80)) * 0.002 + 0.05})`,
-              borderColor: 'rgba(255, 255, 255, 0.15)',
               backdropFilter: `blur(${settings.backgroundBlur ?? 20}px)`,
             }}
           >
@@ -212,7 +210,7 @@ export const SettingsTab: React.FC = () => {
                   className={`rounded-lg py-1 text-[10px] font-medium transition-all ${
                     isSelected
                       ? 'border border-sky-500/40 bg-sky-500/20 text-sky-300'
-                      : 'border border-white/[0.06] bg-white/[0.04] text-neutral-400 hover:bg-white/[0.08] hover:text-white'
+                      : 'bg-neutral-950/60 text-neutral-400 hover:bg-neutral-800/60 hover:text-white'
                   }`}
                 >
                   {preset.label}
@@ -223,7 +221,7 @@ export const SettingsTab: React.FC = () => {
         </div>
 
         {/* Transparency / Opacity Slider */}
-        <div className="space-y-1.5 border-t border-white/[0.06] pt-2.5">
+        <div className="space-y-1.5 pt-2.5">
           <div className="flex items-center justify-between text-[11px]">
             <span className="font-medium text-neutral-300">Background Opacity</span>
             <span className="font-semibold text-sky-400">
@@ -251,7 +249,7 @@ export const SettingsTab: React.FC = () => {
         </div>
 
         {/* Blur Slider */}
-        <div className="space-y-1.5 border-t border-white/[0.06] pt-2.5">
+        <div className="space-y-1.5 pt-2.5">
           <div className="flex items-center justify-between text-[11px]">
             <span className="font-medium text-neutral-300">Background Blur</span>
             <span className="font-semibold text-sky-400">
@@ -284,7 +282,7 @@ export const SettingsTab: React.FC = () => {
       </div>
 
       {/* Window & behavior */}
-      <div className="space-y-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3.5">
+      <div className="space-y-3 rounded-2xl bg-neutral-900/90 p-3.5 shadow-sm">
         <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">
           Window &amp; Behavior
         </span>
@@ -326,7 +324,7 @@ export const SettingsTab: React.FC = () => {
       </div>
 
       {/* Privacy & notifications */}
-      <div className="space-y-3 rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3.5">
+      <div className="space-y-3 rounded-2xl bg-neutral-900/90 p-3.5 shadow-sm">
         <span className="text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-500">
           Privacy &amp; Notifications
         </span>
@@ -344,7 +342,7 @@ export const SettingsTab: React.FC = () => {
           activeClass="bg-amber-500"
         />
 
-        <div className="space-y-1.5 border-t border-white/[0.06] pt-2.5">
+        <div className="space-y-1.5 pt-2.5">
           <div className="flex items-center justify-between text-[11px]">
             <span className="font-medium text-neutral-300">
               Notification Auto-Collapse
@@ -371,7 +369,7 @@ export const SettingsTab: React.FC = () => {
       </div>
 
       {/* Weather */}
-      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.03] p-3.5">
+      <div className="rounded-2xl bg-neutral-900/90 p-3.5 shadow-sm">
         <div className="flex items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
             <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-white/[0.04]">
@@ -392,7 +390,7 @@ export const SettingsTab: React.FC = () => {
             onChange={(e) =>
               updateSettings({ weatherRefreshInterval: Number(e.target.value) })
             }
-            className="rounded-lg border border-white/[0.08] bg-white/[0.05] px-2 py-1 text-[11px] text-white outline-none focus:border-emerald-500/60"
+            className="rounded-lg bg-neutral-800 px-2 py-1 text-[11px] text-white outline-none focus:bg-neutral-700"
             aria-label="Weather refresh interval"
           >
             <option value="5">5 min</option>

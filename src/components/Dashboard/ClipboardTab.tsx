@@ -162,7 +162,7 @@ export const ClipboardTab: React.FC = () => {
         className="min-h-0 flex-1 overflow-x-auto overflow-y-hidden pb-1 pt-1 scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20"
       >
         {filteredItems.length === 0 ? (
-          <div className="flex h-full min-h-[130px] w-full flex-col items-center justify-center rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 text-center">
+          <div className="flex h-full min-h-[130px] w-full flex-col items-center justify-center rounded-2xl bg-neutral-900/90 p-4 text-center shadow-lg">
             <div className="flex h-8 w-8 items-center justify-center rounded-full bg-cyan-500/10 text-cyan-400">
               <ClipboardListIcon size={16} />
             </div>
@@ -308,7 +308,7 @@ export const ClipboardTab: React.FC = () => {
               </button>
             </div>
 
-            <div className="max-h-[140px] overflow-hidden rounded-xl border border-white/20 bg-black/60 shadow-2xl">
+            <div className="max-h-[140px] overflow-hidden rounded-xl bg-black shadow-2xl">
               <img
                 src={previewItem.content}
                 alt="Screenshot full preview"

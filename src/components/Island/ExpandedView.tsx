@@ -174,7 +174,7 @@ export const ExpandedView: React.FC = () => {
           onMouseEnter={() => setIsNavHovered(true)}
           onMouseLeave={() => setIsNavHovered(false)}
           id="dock-switcher"
-          className="flex items-center justify-center rounded-full bg-neutral-900/90 p-1 ring-1 ring-white/15 shadow-xl backdrop-blur-xl cursor-pointer overflow-hidden"
+          className="flex items-center justify-center rounded-full bg-neutral-900/95 p-1 shadow-2xl cursor-pointer overflow-hidden"
           transition={{
             type: 'spring',
             stiffness: 420,

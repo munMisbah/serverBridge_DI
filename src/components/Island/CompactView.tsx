@@ -55,7 +55,7 @@ export const CompactView: React.FC = () => {
             <img
               src={audioPlayback.coverUrl}
               alt="Cover"
-              className="h-5 w-5 shrink-0 rounded-md object-cover shadow-sm ring-1 ring-white/10"
+              className="h-5 w-5 shrink-0 rounded-md object-cover shadow-sm"
             />
           ) : (
             <div

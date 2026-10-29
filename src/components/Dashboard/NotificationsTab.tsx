@@ -42,7 +42,7 @@ export const NotificationsTab: React.FC = () => {
       {/* iOS Notifications Stack */}
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto pr-1">
         {notifications.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center rounded-[22px] border border-white/[0.08] bg-white/[0.03] p-8 text-center backdrop-blur-xl">
+          <div className="flex h-full flex-col items-center justify-center rounded-[22px] bg-neutral-900/90 p-8 text-center shadow-lg">
             <BellIcon size={28} className="mx-auto mb-2 text-white/20" />
             <p className="text-[12px] font-medium text-white/50">
               No Older Notifications
@@ -60,12 +60,12 @@ export const NotificationsTab: React.FC = () => {
             return (
               <div
                 key={notification.id}
-                className="group relative flex items-start justify-between gap-3 rounded-[18px] border border-white/[0.08] bg-white/[0.04] p-3 shadow-lg backdrop-blur-xl transition-all hover:bg-white/[0.07]"
+                className="group relative flex items-start justify-between gap-3 rounded-[18px] bg-neutral-900/90 p-3 shadow-lg transition-all hover:bg-neutral-800/90"
               >
                 <div className="flex min-w-0 items-start gap-2.5">
                   <div
                     className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-[10px] shadow-sm ${
-                      isWhatsApp ? 'bg-[#25D366]' : 'border border-white/10 bg-white/[0.08]'
+                      isWhatsApp ? 'bg-[#25D366]' : 'bg-neutral-800'
                     }`}
                   >
                     {isWhatsApp ? (

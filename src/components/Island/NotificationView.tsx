@@ -41,7 +41,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
 
       if (isScreenshot) {
         return (
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-600 overflow-hidden ring-1 ring-white/10">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-violet-600 overflow-hidden shadow-sm">
             {notification.icon ? (
               <img
                 src={notification.icon}
@@ -89,7 +89,7 @@ export const NotificationView: React.FC<NotificationViewProps> = ({
     }
 
     return (
-      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.06]">
+      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-neutral-800">
         <BellIcon size={16} className="text-neutral-300" />
       </div>
     );

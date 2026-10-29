@@ -61,7 +61,7 @@ export const CalendarTab: React.FC = () => {
   return (
     <div className="flex h-full w-full gap-3 px-4 pt-3 pb-1.5 text-white select-none">
       {/* LEFT COLUMN: Apple Calendar Date Card & + New Event */}
-      <div className="flex w-[145px] shrink-0 flex-col justify-between rounded-[20px] border border-white/[0.08] bg-white/[0.04] p-3 text-center shadow-lg backdrop-blur-xl">
+      <div className="flex w-[145px] shrink-0 flex-col justify-between rounded-[20px] bg-neutral-900/90 p-3 text-center shadow-lg">
         <div>
           <p className="text-[10.5px] font-bold uppercase tracking-wider text-[#FF3B30]">
             {formattedDay}
@@ -87,7 +87,7 @@ export const CalendarTab: React.FC = () => {
       {/* RIGHT COLUMN: Schedule List & Add Form */}
       <div className="flex flex-1 min-w-0 flex-col justify-between">
         {/* Header */}
-        <div className="flex items-center justify-between pb-1.5 border-b border-white/[0.06]">
+        <div className="flex items-center justify-between pb-1">
           <span className="text-[12px] font-semibold text-white/90 tracking-tight">
             Today's Schedule
           </span>
@@ -106,7 +106,7 @@ export const CalendarTab: React.FC = () => {
                 placeholder="Event title..."
                 value={newTitle}
                 onChange={(e) => setNewTitle(e.target.value)}
-                className="w-full rounded-xl border border-white/[0.1] bg-white/[0.06] px-2.5 py-1 text-[11px] text-white placeholder-neutral-500 outline-none focus:border-[#007AFF]"
+                className="w-full rounded-xl bg-neutral-900 px-2.5 py-1.5 text-[11px] text-white placeholder-neutral-500 outline-none focus:bg-neutral-800"
                 autoFocus
               />
 
@@ -115,14 +115,14 @@ export const CalendarTab: React.FC = () => {
                   type="time"
                   value={newTime}
                   onChange={(e) => setNewTime(e.target.value)}
-                  className="w-full rounded-xl border border-white/[0.1] bg-white/[0.06] px-2 py-1 text-[10.5px] text-white outline-none focus:border-[#007AFF]"
+                  className="w-full rounded-xl bg-neutral-900 px-2 py-1 text-[10.5px] text-white outline-none focus:bg-neutral-800"
                 />
                 <input
                   type="text"
                   placeholder="Location (optional)"
                   value={newLocation}
                   onChange={(e) => setNewLocation(e.target.value)}
-                  className="w-full rounded-xl border border-white/[0.1] bg-white/[0.06] px-2 py-1 text-[10.5px] text-white placeholder-neutral-500 outline-none focus:border-[#007AFF]"
+                  className="w-full rounded-xl bg-neutral-900 px-2 py-1 text-[10.5px] text-white placeholder-neutral-500 outline-none focus:bg-neutral-800"
                 />
               </div>
 
@@ -152,7 +152,7 @@ export const CalendarTab: React.FC = () => {
             events.map((event) => (
               <div
                 key={event.id}
-                className="group flex items-center justify-between rounded-xl border border-white/[0.06] bg-white/[0.03] px-2.5 py-1.5 transition-colors hover:bg-white/[0.06]"
+                className="group flex items-center justify-between rounded-xl bg-neutral-900/80 px-2.5 py-2 transition-colors hover:bg-neutral-800/90"
               >
                 <div className="flex items-center gap-2.5 min-w-0">
                   <span

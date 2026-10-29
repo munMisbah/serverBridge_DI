@@ -83,7 +83,7 @@ export const WeatherTab: React.FC = () => {
 
       {/* Bottom Row: 3 iOS Bento Metric Capsules */}
       <div className="grid grid-cols-3 gap-2 mt-1.5">
-        <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.05] border border-white/[0.06] py-1.5 px-1 text-center">
+        <div className="flex flex-col items-center justify-center rounded-2xl bg-neutral-900/90 py-1.5 px-1 text-center shadow-sm">
           <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-neutral-400 tracking-wider">
             <WaterdropsIcon size={11} className="text-sky-400" />
             <span>Humidity</span>
@@ -93,7 +93,7 @@ export const WeatherTab: React.FC = () => {
           </span>
         </div>
 
-        <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.05] border border-white/[0.06] py-1.5 px-1 text-center">
+        <div className="flex flex-col items-center justify-center rounded-2xl bg-neutral-900/90 py-1.5 px-1 text-center shadow-sm">
           <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-neutral-400 tracking-wider">
             <WindIcon size={11} className="text-teal-400" />
             <span>Wind</span>
@@ -104,7 +104,7 @@ export const WeatherTab: React.FC = () => {
           </span>
         </div>
 
-        <div className="flex flex-col items-center justify-center rounded-2xl bg-white/[0.05] border border-white/[0.06] py-1.5 px-1 text-center">
+        <div className="flex flex-col items-center justify-center rounded-2xl bg-neutral-900/90 py-1.5 px-1 text-center shadow-sm">
           <div className="flex items-center gap-1 text-[9px] font-semibold uppercase text-neutral-400 tracking-wider">
             <TemperatureIcon size={11} className="text-amber-400" />
             <span>Feels</span>

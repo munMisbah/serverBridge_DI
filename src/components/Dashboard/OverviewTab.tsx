@@ -108,7 +108,7 @@ export const OverviewTab: React.FC = () => {
         <div
           onClick={handleCycleNextApp}
           title={`Active app: ${activeTheme.name}. Click to cycle app.`}
-          className="group relative size-13 shrink-0 cursor-pointer overflow-hidden rounded-[16px] shadow-lg ring-1 ring-white/10 transition-transform active:scale-95"
+          className="group relative size-13 shrink-0 cursor-pointer overflow-hidden rounded-[16px] shadow-lg transition-transform active:scale-95"
           style={{
             background: `linear-gradient(135deg, ${activeTheme.accentColor} 0%, #15151e 100%)`,
             boxShadow: `0 4px 14px ${activeTheme.accentColor}35`,
