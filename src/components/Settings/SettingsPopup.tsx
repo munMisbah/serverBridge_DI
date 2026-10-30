@@ -1,3 +1,4 @@
+import { CompactSlotType, MediaSlotPlacement } from '../../types';
 import React, { useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { TuningIcon } from '@solar-icons/react/bold/tuning';
@@ -170,6 +171,122 @@ export const SettingsPopup: React.FC = () => {
                   </button>
                 </div>
               </div>
+              {/* Slot Kustomisasi Kapsul (Left & Right Wings) */}
+              <div className="rounded-2xl bg-neutral-900/90 p-3.5 shadow-sm space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
+                    <TuningIcon size={14} className="text-emerald-400" />
+                    Slot Dinamis Kapsul (Samping Mata)
+                  </span>
+                </div>
+
+                {/* Slot Kiri */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-semibold text-white">Slot Sisi Kiri</span>
+                    <span className="text-[10px] text-neutral-400 capitalize">{settings.compactLeftSlot || 'weather'}</span>
+                  </div>
+                  <div className="grid grid-cols-5 gap-1">
+                    {[
+                      { id: 'weather', label: 'Cuaca', icon: '⛅' },
+                      { id: 'clock', label: 'Jam', icon: '⏰' },
+                      { id: 'todo', label: 'Todo', icon: '✅' },
+                      { id: 'media', label: 'Musik', icon: '🎵' },
+                      { id: 'clipboard', label: 'Clip', icon: '📋' },
+                    ].map((opt) => {
+                      const isActive = (settings.compactLeftSlot || 'weather') === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => updateSettings({ compactLeftSlot: opt.id as CompactSlotType })}
+                          className={`flex flex-col items-center gap-0.5 rounded-xl py-1.5 px-1 text-center transition-all ${
+                            isActive
+                              ? 'bg-emerald-500 text-white font-semibold shadow-md'
+                              : 'bg-white/[0.04] text-neutral-400 hover:bg-white/[0.08] hover:text-white'
+                          }`}
+                        >
+                          <span className="text-xs">{opt.icon}</span>
+                          <span className="text-[10px]">{opt.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Slot Kanan */}
+                <div className="space-y-1.5 pt-2 border-t border-white/[0.04]">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-semibold text-white">Slot Sisi Kanan</span>
+                    <span className="text-[10px] text-neutral-400 capitalize">{settings.compactRightSlot || 'clock'}</span>
+                  </div>
+                  <div className="grid grid-cols-5 gap-1">
+                    {[
+                      { id: 'clock', label: 'Jam', icon: '⏰' },
+                      { id: 'weather', label: 'Cuaca', icon: '⛅' },
+                      { id: 'todo', label: 'Todo', icon: '✅' },
+                      { id: 'media', label: 'Musik', icon: '🎵' },
+                      { id: 'clipboard', label: 'Clip', icon: '📋' },
+                    ].map((opt) => {
+                      const isActive = (settings.compactRightSlot || 'clock') === opt.id;
+                      return (
+                        <button
+                          key={opt.id}
+                          type="button"
+                          onClick={() => updateSettings({ compactRightSlot: opt.id as CompactSlotType })}
+                          className={`flex flex-col items-center gap-0.5 rounded-xl py-1.5 px-1 text-center transition-all ${
+                            isActive
+                              ? 'bg-sky-500 text-white font-semibold shadow-md'
+                              : 'bg-white/[0.04] text-neutral-400 hover:bg-white/[0.08] hover:text-white'
+                          }`}
+                        >
+                          <span className="text-xs">{opt.icon}</span>
+                          <span className="text-[10px]">{opt.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Posisi Musik Saat Playing */}
+                <div className="space-y-1.5 pt-2 border-t border-white/[0.04]">
+                  <div className="flex items-center justify-between text-[11px]">
+                    <span className="font-semibold text-white">Posisi Info Musik Saat Play</span>
+                    <span className="text-[10px] text-neutral-400">
+                      {(settings.mediaPlacement || 'right') === 'right' ? 'Di Kanan (Gantikan Jam)' : 'Di Kiri'}
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={() => updateSettings({ mediaPlacement: 'right' as MediaSlotPlacement })}
+                      className={`flex items-center justify-center gap-1.5 rounded-xl py-2 px-2.5 text-xs font-medium transition-all ${
+                        (settings.mediaPlacement || 'right') === 'right'
+                          ? 'bg-sky-500 text-white font-semibold shadow-md'
+                          : 'bg-white/[0.04] text-neutral-400 hover:bg-white/[0.08] hover:text-white'
+                      }`}
+                    >
+                      <span>👉 Di Kanan (Gantikan Jam)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => updateSettings({ mediaPlacement: 'left' as MediaSlotPlacement })}
+                      className={`flex items-center justify-center gap-1.5 rounded-xl py-2 px-2.5 text-xs font-medium transition-all ${
+                        settings.mediaPlacement === 'left'
+                          ? 'bg-sky-500 text-white font-semibold shadow-md'
+                          : 'bg-white/[0.04] text-neutral-400 hover:bg-white/[0.08] hover:text-white'
+                      }`}
+                    >
+                      <span>👈 Di Kiri (Gantikan Slot Kiri)</span>
+                    </button>
+                  </div>
+                  <p className="text-[10px] text-neutral-500 leading-tight pt-0.5">
+                    Saat musik Windows diputar, info lagu otomatis tampil menggantikan slot pilihan Anda.
+                  </p>
+                </div>
+              </div>
+
 
               {/* 2. Interaction Mode */}
               <div className="rounded-2xl bg-neutral-900/90 p-3.5 shadow-sm space-y-2">

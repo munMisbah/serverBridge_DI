@@ -4,6 +4,10 @@ export type IslandStyle = 'pill' | 'notch';
 
 export type ExpandTrigger = 'hover' | 'click';
 
+export type CompactSlotType = 'weather' | 'clock' | 'todo' | 'media' | 'clipboard';
+
+export type MediaSlotPlacement = 'right' | 'left';
+
 export type ActiveTab = 'todo' | 'all' | 'weather' | 'calendar' | 'notifications' | 'clipboard';
 
 export interface TodoItem {
@@ -84,6 +88,9 @@ export interface UserSettings {
   reducedMotionEnabled: boolean;
   backgroundOpacity: number; // in % (20 to 100)
   backgroundBlur: number; // in px (0 to 40)
+  compactLeftSlot: CompactSlotType;
+  compactRightSlot: CompactSlotType;
+  mediaPlacement: MediaSlotPlacement;
 }
 
 export interface AudioPlaybackState {

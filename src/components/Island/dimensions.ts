@@ -54,7 +54,7 @@ export const getIslandDimensions = (
 
   if (state === 'compact') {
     return isPlaying
-      ? { width: 208, height: 40, borderRadius: '20px 20px 20px 20px', top: 12 }
+      ? { width: 236, height: 40, borderRadius: '20px 20px 20px 20px', top: 12 }
       : { width: 196, height: 40, borderRadius: '20px 20px 20px 20px', top: 12 };
   }
 

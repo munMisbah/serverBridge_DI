@@ -63,6 +63,9 @@ const DEFAULT_SETTINGS: UserSettings = {
   reducedMotionEnabled: false,
   backgroundOpacity: 85,
   backgroundBlur: 20,
+  compactLeftSlot: 'weather',
+  compactRightSlot: 'clock',
+  mediaPlacement: 'right',
 };
 const DEFAULT_EVENTS: CalendarEvent[] = [
   {
