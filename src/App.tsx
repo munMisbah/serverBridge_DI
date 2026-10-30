@@ -10,6 +10,7 @@ import { CopyIcon } from '@solar-icons/react/bold/copy';
 import { CameraIcon } from '@solar-icons/react/bold/camera';
 import { ClipboardListIcon } from '@solar-icons/react/bold/clipboard-list';
 import { GalleryIcon } from '@solar-icons/react/bold/gallery';
+import { ChecklistIcon } from '@solar-icons/react/bold/checklist';
 
 const IslandControllerBar: React.FC<{
   isTauri: boolean;
@@ -158,6 +159,19 @@ const IslandControllerBar: React.FC<{
       >
         <ClipboardListIcon size={12} className="text-cyan-400" />
         <span>Open Clipboard</span>
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          setState('expanded');
+          setActiveTab('todo');
+        }}
+        className="flex items-center gap-1 rounded-lg bg-neutral-800 px-2.5 py-1 text-white transition-colors hover:bg-neutral-700"
+        title="Buka Tab Todo"
+      >
+        <ChecklistIcon size={12} className="text-emerald-400" />
+        <span>Open Todo</span>
       </button>
 
       <div className="mx-0.5 h-4 w-px bg-white/[0.08]" />

@@ -9,6 +9,7 @@ import {
   AudioPlaybackState,
   ClipboardItem,
   ActiveTab,
+  TodoItem,
 } from '../types';
 
 interface IslandContextType {
@@ -40,6 +41,11 @@ interface IslandContextType {
   addClipboardItem: (item: Omit<ClipboardItem, 'id' | 'timestamp'> & { id?: string; timestamp?: number }) => void;
   isSettingsOpen: boolean;
   setIsSettingsOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  todos: TodoItem[];
+  addTodo: (title: string) => void;
+  toggleTodo: (id: string) => void;
+  deleteTodo: (id: string) => void;
+  clearCompletedTodos: () => void;
 }
 
 const DEFAULT_SETTINGS: UserSettings = {
@@ -91,6 +97,27 @@ const DEFAULT_EVENTS: CalendarEvent[] = [
     color: '#8b5cf6',
     createdAt: Date.now() - 100000,
     updatedAt: Date.now() - 100000,
+  },
+];
+
+const DEFAULT_TODOS: TodoItem[] = [
+  {
+    id: 'todo-1',
+    title: 'Finish UI design feedback',
+    completed: true,
+    createdAt: Date.now() - 3600000 * 2,
+  },
+  {
+    id: 'todo-2',
+    title: 'Check Dynamic Island todo progress',
+    completed: true,
+    createdAt: Date.now() - 3600000,
+  },
+  {
+    id: 'todo-3',
+    title: 'Review and release new version',
+    completed: false,
+    createdAt: Date.now() - 1800000,
   },
 ];
 
@@ -207,13 +234,21 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<ActiveTab>('all');
+  const [activeTab, setActiveTab] = useState<ActiveTab>('todo');
   const [clipboardItems, setClipboardItems] = useState<ClipboardItem[]>(() => {
     try {
       const saved = localStorage.getItem('di_clipboard_history');
       return saved ? JSON.parse(saved) : INITIAL_CLIPBOARD_ITEMS;
     } catch {
       return INITIAL_CLIPBOARD_ITEMS;
+    }
+  });
+  const [todos, setTodos] = useState<TodoItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('di_todos');
+      return saved ? JSON.parse(saved) : DEFAULT_TODOS;
+    } catch {
+      return DEFAULT_TODOS;
     }
   });
   const [audioPlayback, setAudioPlayback] = useState<AudioPlaybackState | null>(DEFAULT_AUDIO_PLAYBACK);
@@ -287,6 +322,15 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       console.error('Failed to persist clipboard history:', err);
     }
   }, [clipboardItems]);
+
+  // Save todos to local storage
+  useEffect(() => {
+    try {
+      localStorage.setItem('di_todos', JSON.stringify(todos));
+    } catch (err) {
+      console.error('Failed to persist todos:', err);
+    }
+  }, [todos]);
 
   // Weather fetching with Open-Meteo
   const refreshWeather = useCallback(async () => {
@@ -730,6 +774,32 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       localStorage.removeItem('di_clipboard_history');
     } catch {}
   }, []);
+
+  const addTodo = useCallback((title: string) => {
+    const trimmed = title.trim();
+    if (!trimmed) return;
+    const newTodo: TodoItem = {
+      id: `todo-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      title: trimmed,
+      completed: false,
+      createdAt: Date.now(),
+    };
+    setTodos((prev) => [newTodo, ...prev]);
+  }, []);
+
+  const toggleTodo = useCallback((id: string) => {
+    setTodos((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, completed: !t.completed } : t))
+    );
+  }, []);
+
+  const deleteTodo = useCallback((id: string) => {
+    setTodos((prev) => prev.filter((t) => t.id !== id));
+  }, []);
+
+  const clearCompletedTodos = useCallback(() => {
+    setTodos((prev) => prev.filter((t) => !t.completed));
+  }, []);
   return (
     <IslandContext.Provider
       value={{
@@ -761,6 +831,11 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         addClipboardItem,
         isSettingsOpen,
         setIsSettingsOpen,
+        todos,
+        addTodo,
+        toggleTodo,
+        deleteTodo,
+        clearCompletedTodos,
       }}
     >
       {children}
