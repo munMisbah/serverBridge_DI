@@ -1,4 +1,3 @@
-import { INDONESIA_WEATHER_LOCATIONS } from '../../utils/locations';
 import React from 'react';
 import { SunIcon } from '@solar-icons/react/bold/sun';
 import { CloudIcon } from '@solar-icons/react/bold/cloud';
@@ -17,7 +16,6 @@ export const WeatherTab: React.FC = () => {
     weatherLoading,
     refreshWeather,
     settings,
-    updateSettings,
   } = useIsland();
   const getWeatherIcon = () => {
     if (!weather) return <SunIcon size={24} className="text-amber-400" />;
@@ -40,24 +38,9 @@ export const WeatherTab: React.FC = () => {
           <div className="min-w-0">
             <div className="flex items-center gap-1">
               <MapPointIcon size={12} className="text-sky-400 shrink-0" />
-              <select
-                value={settings.weatherLocation.name}
-                onChange={(e) => {
-                  const found = INDONESIA_WEATHER_LOCATIONS.find((loc) => loc.name === e.target.value);
-                  if (found) {
-                    updateSettings({ weatherLocation: found });
-                  }
-                }}
-                className="bg-transparent text-[13px] font-semibold text-white cursor-pointer outline-none hover:text-sky-300 transition-colors py-0 px-0"
-                title="Pilih Lokasi Cuaca"
-                aria-label="Pilih Lokasi Cuaca"
-              >
-                {INDONESIA_WEATHER_LOCATIONS.map((loc) => (
-                  <option key={loc.name} value={loc.name} className="bg-[#14151a] text-white">
-                    {loc.name}
-                  </option>
-                ))}
-              </select>
+              <h2 className="truncate text-[13px] font-semibold text-white leading-tight">
+                {weather?.locationName || settings.weatherLocation.name}
+              </h2>
             </div>
             <p className="truncate text-[11px] text-neutral-400 leading-tight mt-0.5">
               {weather?.weatherDescription || 'Partly cloudy'}
