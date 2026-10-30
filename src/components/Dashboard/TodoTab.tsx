@@ -1,5 +1,4 @@
 import React, { useState, useRef } from 'react';
-import { AddCircleIcon } from '@solar-icons/react/bold/add-circle';
 import { CheckCircleIcon } from '@solar-icons/react/bold/check-circle';
 import { CheckIcon } from '@solar-icons/react/bold/check';
 import { TrashBinTrashIcon } from '@solar-icons/react/bold/trash-bin-trash';
@@ -7,7 +6,6 @@ import { useIsland } from '../../context/IslandContext';
 
 export const TodoTab: React.FC = () => {
   const { todos, addTodo, toggleTodo, deleteTodo } = useIsland();
-  const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -21,10 +19,11 @@ export const TodoTab: React.FC = () => {
   const strokeDashoffset = circumference - (percentage / 100) * circumference;
   const handleAddTask = (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!newTitle.trim()) return;
-    addTodo(newTitle.trim());
+    const title = newTitle.trim();
+    if (!title) return;
+    addTodo(title);
     setNewTitle('');
-    setIsAdding(false);
+    inputRef.current?.focus();
   };
 
   return (
@@ -81,60 +80,25 @@ export const TodoTab: React.FC = () => {
 
       {/* RIGHT COLUMN: Todo List & Add Task */}
       <div className="flex min-w-0 flex-1 flex-col justify-between overflow-hidden">
-        {/* Top Bar: Either Header Row (Tasks count + New Task) OR Inline Add Form */}
-        {!isAdding ? (
-          <div className="flex shrink-0 items-center justify-between pb-2 px-0.5">
-            <div className="flex items-center gap-1.5">
-              <span className="text-[12px] font-semibold text-white/90">Tasks</span>
-              <span className="rounded-full bg-white/[0.08] px-1.5 py-0.2 text-[9px] font-medium text-white/60">
-                {totalCount}
-              </span>
-            </div>
+        {/* Header Row: Tasks count */}
+        <div className="flex shrink-0 items-center gap-1.5 pb-1.5 px-0.5">
+          <span className="text-[12px] font-semibold text-white/90">Tasks</span>
+          <span className="rounded-full bg-neutral-800 px-1.5 py-0.2 text-[9px] font-medium text-neutral-300">
+            {totalCount}
+          </span>
+        </div>
 
-            <button
-              type="button"
-              onClick={() => {
-                setIsAdding(true);
-                setTimeout(() => inputRef.current?.focus(), 50);
-              }}
-              className="flex items-center gap-1 rounded-full bg-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold text-emerald-300 transition-all hover:bg-emerald-500/30 active:scale-95 cursor-pointer"
-            >
-              <AddCircleIcon size={13} />
-              <span>New Task</span>
-            </button>
-          </div>
-        ) : (
-          <form onSubmit={handleAddTask} className="mb-1.5 shrink-0">
-            <div className="flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/[0.05] px-2 py-0.5 transition-all focus-within:border-emerald-500/60 focus-within:bg-white/[0.08]">
-              <input
-                ref={inputRef}
-                type="text"
-                value={newTitle}
-                onChange={(e) => setNewTitle(e.target.value)}
-                placeholder="What needs to be done?"
-                className="min-w-0 flex-1 bg-transparent py-0.5 text-[11px] text-white placeholder-white/30 outline-none"
-                autoFocus
-              />
-              <button
-                type="submit"
-                disabled={!newTitle.trim()}
-                className="rounded-md bg-emerald-500 px-2 py-0.5 text-[9.5px] font-semibold text-neutral-950 transition-all hover:bg-emerald-400 disabled:opacity-30 disabled:hover:bg-emerald-500 cursor-pointer"
-              >
-                Add
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setIsAdding(false);
-                  setNewTitle('');
-                }}
-                className="rounded-md bg-white/[0.08] px-1.5 py-0.5 text-[9.5px] text-white/60 transition-all hover:bg-white/15 hover:text-white cursor-pointer"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
+        {/* Inline Add Field: ketik lalu tekan Enter untuk menambah task */}
+        <form onSubmit={handleAddTask} className="mb-1.5 shrink-0">
+          <input
+            ref={inputRef}
+            type="text"
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            placeholder="Tambah task baru, lalu tekan Enter…"
+            className="w-full rounded-xl bg-neutral-900 px-2.5 py-1.5 text-[11px] text-white placeholder-neutral-500 outline-none transition-colors focus:bg-neutral-800"
+          />
+        </form>
         {/* Scrollable Todo Items List */}
         <div className="min-h-0 flex-1 overflow-y-auto space-y-1.5 pr-1 scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20">
           {todos.length === 0 ? (
@@ -143,7 +107,7 @@ export const TodoTab: React.FC = () => {
                 Belum ada todo task
               </p>
               <p className="mt-0.5 text-[9.5px] text-white/35">
-                Klik tombol &quot;New Task&quot; untuk menambahkan task baru
+                Ketik task baru di kolom atas lalu tekan Enter
               </p>
             </div>
           ) : (
