@@ -34,6 +34,8 @@ export const getIslandDimensions = (
     }
     if (state === 'expanded') {
       switch (activeTab) {
+        case 'todo':
+          return { width: 500, height: 230, borderRadius: '0px 0px 36px 36px', top: 0 };
         case 'calendar':
           return { width: 480, height: 215, borderRadius: '0px 0px 36px 36px', top: 0 };
         case 'clipboard':
@@ -58,6 +60,8 @@ export const getIslandDimensions = (
 
   if (state === 'expanded') {
     switch (activeTab) {
+      case 'todo':
+        return { width: 500, height: 230, borderRadius: '36px 36px 36px 36px', top: 12 };
       case 'calendar':
         return { width: 480, height: 215, borderRadius: '36px 36px 36px 36px', top: 12 };
       case 'clipboard':

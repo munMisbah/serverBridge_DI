@@ -5,6 +5,8 @@ import { CloudSun2Icon } from '@solar-icons/react/bold/cloud-sun-2';
 import { CalendarDateIcon } from '@solar-icons/react/bold/calendar-date';
 import { BellIcon } from '@solar-icons/react/bold/bell';
 import { ClipboardListIcon } from '@solar-icons/react/bold/clipboard-list';
+import { ChecklistIcon } from '@solar-icons/react/bold/checklist';
+import { TodoTab } from '../Dashboard/TodoTab';
 import { useIsland } from '../../context/IslandContext';
 import { OverviewTab } from '../Dashboard/OverviewTab';
 import { WeatherTab } from '../Dashboard/WeatherTab';
@@ -20,6 +22,7 @@ interface TabItem {
 }
 
 const TAB_ORDER: ActiveTab[] = [
+  'todo',
   'all',
   'weather',
   'calendar',
@@ -46,6 +49,7 @@ export const ExpandedView: React.FC = () => {
   }, [setState]);
 
   const tabs: TabItem[] = [
+    { id: 'todo', label: 'Todo', icon: ChecklistIcon },
     { id: 'all', label: 'Music', icon: MusicNote2Icon },
     { id: 'weather', label: 'Weather', icon: CloudSun2Icon },
     { id: 'calendar', label: 'Calendar', icon: CalendarDateIcon },
@@ -141,6 +145,7 @@ export const ExpandedView: React.FC = () => {
             }}
             className="h-full w-full"
           >
+            {activeTab === 'todo' && <TodoTab />}
             {activeTab === 'all' && <OverviewTab />}
             {activeTab === 'weather' && <WeatherTab />}
             {activeTab === 'calendar' && <CalendarTab />}

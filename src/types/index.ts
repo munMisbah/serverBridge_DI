@@ -4,7 +4,14 @@ export type IslandStyle = 'pill' | 'notch';
 
 export type ExpandTrigger = 'hover' | 'click';
 
-export type ActiveTab = 'all' | 'weather' | 'calendar' | 'notifications' | 'clipboard';
+export type ActiveTab = 'todo' | 'all' | 'weather' | 'calendar' | 'notifications' | 'clipboard';
+
+export interface TodoItem {
+  id: string;
+  title: string;
+  completed: boolean;
+  createdAt: number;
+}
 
 export type ClipboardItemType = 'text' | 'image';
 
