@@ -144,7 +144,9 @@ export const NotesLayer: React.FC = () => {
       return;
     }
     setExtraHitRects(
-      openNotes.map((n) => ({ x: n.x, y: n.y, width: n.width, height: n.height }))
+      openNotes
+        .filter((n) => n.x >= 0 && n.y >= 0)
+        .map((n) => ({ x: n.x, y: n.y, width: n.width, height: n.height }))
     );
   }, [layerReady, openNotes]);
 

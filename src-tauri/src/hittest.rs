@@ -129,7 +129,7 @@ pub fn start_hit_test_loop(app: AppHandle) {
 
             // Hover only follows the island (not floating notes), so hovering a
             // note never expands the island by accident.
-            let slop = if hovered { 2.0 } else { 0.0 };
+            let slop = if hovered { 4.0 } else { 0.0 };
             let is_hovered = config
                 .island
                 .map(|rect| contains(&rect, local_x, local_y, slop))
@@ -140,16 +140,14 @@ pub fn start_hit_test_loop(app: AppHandle) {
                 let _ = window.emit("island-hover", hovered);
             }
 
+            // Whenever the island is hovered, it is guaranteed interactive so
+            // click-through toggles never fight hover detection at borders.
             let is_interactive = config.force
-                || config
-                    .island
-                    .map(|rect| contains(&rect, local_x, local_y, 0.0))
-                    .unwrap_or(false)
+                || is_hovered
                 || config
                     .interactive
                     .iter()
-                    .any(|rect| contains(rect, local_x, local_y, 0.0));
-
+                    .any(|rect| contains(rect, local_x, local_y, 4.0));
             let should_ignore = !is_interactive;
             if should_ignore != ignored {
                 if window.set_ignore_cursor_events(should_ignore).is_ok() {

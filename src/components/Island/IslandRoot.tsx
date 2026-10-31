@@ -133,9 +133,9 @@ export const IslandRoot: React.FC = () => {
 
       setIslandHitRect({
         x: Math.max(0, (vw - dimensions.width) / 2),
-        y: dimensions.top,
+        y: 0,
         width: dimensions.width,
-        height: dimensions.height,
+        height: dimensions.height + dimensions.top,
       });
     };
 

@@ -36,6 +36,15 @@ pub fn set_notes_layer_mode(app: tauri::AppHandle, enabled: bool) -> Result<(), 
 
 
     if !enabled {
+        if let Some(state) = app.try_state::<crate::hittest::HitTestState>() {
+            if let Ok(mut config_opt) = state.config.lock() {
+                if let Some(config) = &mut *config_opt {
+                    if let Some(island) = &mut config.island {
+                        island.x = ((WINDOW_WIDTH - island.width) / 2.0).max(0.0);
+                    }
+                }
+            }
+        }
         return setup_initial_window_position(&window);
     }
 
@@ -51,6 +60,15 @@ pub fn set_notes_layer_mode(app: tauri::AppHandle, enabled: bool) -> Result<(), 
     let width = area.size.width as f64 / scale;
     let height = area.size.height as f64 / scale;
 
+    if let Some(state) = app.try_state::<crate::hittest::HitTestState>() {
+        if let Ok(mut config_opt) = state.config.lock() {
+            if let Some(config) = &mut *config_opt {
+                if let Some(island) = &mut config.island {
+                    island.x = ((width - island.width) / 2.0).max(0.0);
+                }
+            }
+        }
+    }
     window
         .set_size(LogicalSize::new(width, height))
         .map_err(|e| format!("Set size failed: {}", e))?;
