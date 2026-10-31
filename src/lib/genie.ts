@@ -39,9 +39,9 @@ interface GenieTask {
   direction: GenieDirection;
   duration: number;
   start: number;
+  onAlmostDone?: () => void;
   resolve: () => void;
 }
-
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const easeInOutCubic = (t: number) =>
@@ -58,7 +58,7 @@ const ensureCanvas = (): CanvasRenderingContext2D | null => {
     canvas = document.createElement('canvas');
     canvas.setAttribute('aria-hidden', 'true');
     canvas.style.cssText =
-      'position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:70;';
+      'position:fixed;inset:0;width:100vw;height:100vh;pointer-events:none;z-index:70;display:block;';
     document.body.appendChild(canvas);
   }
 
@@ -69,7 +69,6 @@ const ensureCanvas = (): CanvasRenderingContext2D | null => {
     canvas.width = width;
     canvas.height = height;
   }
-  canvas.style.display = 'block';
 
   ctx = canvas.getContext('2d');
   return ctx;
@@ -78,13 +77,11 @@ const ensureCanvas = (): CanvasRenderingContext2D | null => {
 const drawTask = (
   c: CanvasRenderingContext2D,
   task: GenieTask,
-  progress: number,
-  crowded: boolean
+  progress: number
 ) => {
   const { rect, point, direction, image, imgW, imgH } = task;
-  const rows = Math.max(16, Math.round(rect.h / (crowded ? 2 : 1)));
+  const rows = Math.max(36, Math.round(rect.h / 3));
   const rowH = rect.h / rows;
-
   // Minimize is the open warp played backwards, so every frame of the close
   // mirrors the open at the same shape — no separate direction math.
   const p = direction === 'minimize' ? 1 - progress : progress;
@@ -108,7 +105,7 @@ const drawTask = (
     const width = right - left;
     if (width < 0.4) continue;
 
-    const sliceH = Math.max(rowH, 0.9);
+    const sliceH = Math.max(rowH + 0.6, 1.0);
     c.drawImage(
       image,
       0,
@@ -130,11 +127,16 @@ const frame = (now: number) => {
   c.setTransform(dpr, 0, 0, dpr, 0, 0);
   c.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
-  const crowded = tasks.length > 1;
   for (let i = tasks.length - 1; i >= 0; i -= 1) {
     const task = tasks[i];
     const progress = clamp((now - task.start) / task.duration, 0, 1);
-    drawTask(c, task, progress, crowded);
+    drawTask(c, task, progress);
+
+    if (progress >= 0.94 && task.onAlmostDone) {
+      task.onAlmostDone();
+      task.onAlmostDone = undefined;
+    }
+
     if (progress >= 1) {
       tasks.splice(i, 1);
       task.resolve();
@@ -147,7 +149,8 @@ const frame = (now: number) => {
   }
 
   frameId = 0;
-  if (canvas) canvas.style.display = 'none';
+  // Keep canvas mounted, simply leave cleared transparent surface
+  c.clearRect(0, 0, window.innerWidth, window.innerHeight);
 };
 
 /** Play one genie warp. Resolves when the animation finishes. */
@@ -159,19 +162,32 @@ export const playGenie = (options: {
   point: GeniePoint;
   direction: GenieDirection;
   duration?: number;
+  onAlmostDone?: () => void;
 }): Promise<void> => {
   const context = ensureCanvas();
   if (!context) return Promise.resolve();
-
-  return new Promise((resolve) => {
-    tasks.push({
-      ...options,
-      duration: options.duration ?? 460,
-      start: performance.now(),
-      resolve,
-    });
-    if (!frameId) frameId = requestAnimationFrame(frame);
+  let resolvePromise!: () => void;
+  const promise = new Promise<void>((res) => {
+    resolvePromise = res;
   });
+
+  const task: GenieTask = {
+    ...options,
+    duration: options.duration ?? 420,
+    start: performance.now(),
+    resolve: resolvePromise,
+  };
+
+  // When minimizing, immediately render frame 0 synchronously so there is no
+  // 1-frame blackout when the DOM note is hidden!
+  if (options.direction === 'minimize') {
+    context.setTransform(dpr, 0, 0, dpr, 0, 0);
+    drawTask(context, task, 0);
+  }
+
+  tasks.push(task);
+  if (!frameId) frameId = requestAnimationFrame(frame);
+  return promise;
 };
 
 /** Everything the painter needs to draw a note card. */

@@ -11,9 +11,11 @@ import { ListOrderedIcon } from '@solar-icons/react/bold/list-ordered';
 import { useIsland } from '../../context/IslandContext';
 import { setHitTestForce } from '../../lib/hitTest';
 import { findNoteAnchor, originToViewport, type NoteOrigin } from '../../lib/noteTransition';
+import { paintNoteSnapshot, playGenie } from '../../lib/genie';
 import {
   applyNoteFormat,
   isRichNote,
+  noteSnapshotLines,
   noteToText,
   sanitizeNoteHtml,
   selectionHasTag,
@@ -43,11 +45,6 @@ import type { NoteItem } from '../../types';
 const EDGE_PAD = 6;
 const TEXT_SAVE_DELAY = 350;
 
-/** Spring used while the card flies out of the note list (macOS-ish lift). */
-const LIFT_SPRING = { type: 'spring', stiffness: 430, damping: 30, mass: 0.65 } as const;
-/** Fly-back curve: fast at the start, soft landing into the row. */
-const FLY_BACK_EASE: [number, number, number, number] = [0.32, 0, 0.2, 1];
-const FLY_BACK_DURATION = 0.34;
 const INTRO_GUARD_MS = 620;
 
 type FormatButton = {
@@ -109,27 +106,21 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note, origin, closing = 
   const cardRef = useRef<HTMLDivElement>(null);
   // Genie warps need a screenshot, so the real card stays hidden while the
   // canvas owns the pixels.
-  const [revealed] = useState(true);
+  const [revealed, setRevealed] = useState(
+    () => closing || !origin || settings.reducedMotionEnabled
+  );
 
   const [initial] = useState(() => {
     if (closing) return { x: note.x, y: note.y, scale: 1, opacity: 1, blur: 0 };
-    if (!origin) {
-      return {
-        x: note.x,
-        y: note.y,
-        scale: reduced ? 1 : 0.88,
-        opacity: 0,
-        blur: reduced ? 0 : 5,
-      };
+    if (origin && !settings.reducedMotionEnabled) {
+      return { x: note.x, y: note.y, scale: 1, opacity: 0, blur: 0 };
     }
-    const anchor = originToViewport(origin);
-    const { w, h } = sizeRef.current;
     return {
-      x: anchor.cx - w / 2,
-      y: anchor.cy - h / 2,
-      scale: Math.min(1, Math.max(origin.w / w, 0.12)),
-      opacity: 0.1,
-      blur: 2,
+      x: note.x,
+      y: note.y,
+      scale: reduced ? 1 : 0.88,
+      opacity: 0,
+      blur: reduced ? 0 : 5,
     };
   });
 
@@ -186,12 +177,45 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note, origin, closing = 
       animating.current = false;
     }, INTRO_GUARD_MS);
 
+    const plainText = isRichNote(text) ? noteToText(text) : text;
+    const paintSpec = {
+      width: sizeRef.current.w,
+      height: sizeRef.current.h,
+      theme,
+      dots: NOTE_COLORS.map((color) => NOTE_THEME[color].dot),
+      activeDot: NOTE_COLORS.indexOf(note.color),
+      title: plainText.split('\n')[0].trim().slice(0, 28) || 'Catatan kosong',
+      lines: noteSnapshotLines(text),
+      time: formatTime(note.updatedAt),
+    };
+
     if (origin && !reduced) {
-      animate(x, note.x, LIFT_SPRING);
-      animate(y, note.y, LIFT_SPRING);
-      animate(scale, 1, LIFT_SPRING);
-      animate(opacity, 1, { duration: 0.22, ease: 'easeOut' });
-      animate(blur, 0, { duration: 0.24, ease: 'easeOut' });
+      const anchor = originToViewport(origin);
+      const rect = {
+        x: note.x,
+        y: note.y,
+        w: sizeRef.current.w,
+        h: sizeRef.current.h,
+      };
+
+      setRevealed(false);
+      const snapshot = paintNoteSnapshot(paintSpec);
+      void playGenie({
+        image: snapshot.image,
+        imgW: snapshot.w,
+        imgH: snapshot.h,
+        rect,
+        point: { x: anchor.cx, y: anchor.cy },
+        direction: 'open',
+        duration: 420,
+        onAlmostDone: () => {
+          opacity.set(1);
+          setRevealed(true);
+        },
+      }).then(() => {
+        opacity.set(1);
+        setRevealed(true);
+      });
       return;
     }
 
@@ -205,7 +229,7 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note, origin, closing = 
     animate(scale, 1, { type: 'spring', stiffness: 400, damping: 26, mass: 0.6 });
     animate(opacity, 1, { duration: 0.16, ease: 'easeOut' });
     animate(blur, 0, { duration: 0.24, ease: 'easeOut' });
-  }, [note.x, note.y, origin, x, y, scale, opacity, blur]);
+  }, [note.x, note.y, origin, x, y, scale, opacity, blur, text, reduced, theme, note.color, note.updatedAt]);
 
   // Exit: shrink back into the note row (or the island when the list is closed).
   useEffect(() => {
@@ -223,22 +247,35 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note, origin, closing = 
     }
 
 
-    const { w, h } = sizeRef.current;
+    const plainText = isRichNote(text) ? noteToText(text) : text;
+    const paintSpec = {
+      width: sizeRef.current.w,
+      height: sizeRef.current.h,
+      theme,
+      dots: NOTE_COLORS.map((color) => NOTE_THEME[color].dot),
+      activeDot: NOTE_COLORS.indexOf(note.color),
+      title: plainText.split('\n')[0].trim().slice(0, 28) || 'Catatan kosong',
+      lines: noteSnapshotLines(text),
+      time: formatTime(note.updatedAt),
+    };
+
     const anchor = findNoteAnchor(note.id);
     const target = anchor
-      ? {
-          x: originToViewport(anchor).cx - w / 2,
-          y: originToViewport(anchor).cy - h / 2,
-          scale: Math.min(1, Math.max(anchor.w / w, 0.08)),
-        }
-      : { x: window.innerWidth / 2 - w / 2, y: -h, scale: 0.08 };
+      ? originToViewport(anchor)
+      : { cx: window.innerWidth / 2, cy: 0 };
 
-    animate(x, target.x, { duration: FLY_BACK_DURATION, ease: FLY_BACK_EASE });
-    animate(y, target.y, { duration: FLY_BACK_DURATION, ease: FLY_BACK_EASE });
-    animate(scale, target.scale, { duration: FLY_BACK_DURATION, ease: FLY_BACK_EASE });
-    animate(opacity, 0, { duration: 0.24, ease: 'easeIn' });
-    animate(blur, 4, { duration: 0.26, ease: 'easeIn' });
-  }, [closing, note.id, x, y, scale, opacity, blur]);
+    const snapshot = paintNoteSnapshot(paintSpec);
+    void playGenie({
+      image: snapshot.image,
+      imgW: snapshot.w,
+      imgH: snapshot.h,
+      rect: { x: x.get(), y: y.get(), w: sizeRef.current.w, h: sizeRef.current.h },
+      point: { x: target.cx, y: target.cy },
+      direction: 'minimize',
+      duration: 380,
+    });
+    opacity.set(0);
+  }, [closing, note.id, x, y, scale, opacity, blur, text, reduced, theme, note.color, note.updatedAt]);
 
   const commitHtml = (value: string) => {
     window.clearTimeout(saveTimer.current);
