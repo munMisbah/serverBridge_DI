@@ -29,80 +29,34 @@ pub fn set_always_on_top(app: tauri::AppHandle, enabled: bool) -> Result<(), Str
 /// The webview is transparent, so the extra surface stays invisible; the
 /// frontend hit-test keeps everything outside the island/notes click-through.
 #[tauri::command]
-pub fn set_notes_layer_mode(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
-    let window = app
-        .get_webview_window("main")
-        .ok_or_else(|| "Main window not found".to_string())?;
+pub fn set_notes_layer_mode(_app: tauri::AppHandle, _enabled: bool) -> Result<(), String> {
+    // Window is permanently sized to the monitor work area with click-through;
+    // zero window resizing = zero DWM swapchain destruction & blinking!
+    Ok(())
+}
 
-
-    if !enabled {
-        if let Some(state) = app.try_state::<crate::hittest::HitTestState>() {
-            if let Ok(mut config_opt) = state.config.lock() {
-                if let Some(config) = &mut *config_opt {
-                    if let Some(island) = &mut config.island {
-                        island.x = ((WINDOW_WIDTH - island.width) / 2.0).max(0.0);
-                    }
-                }
-            }
-        }
-        return setup_initial_window_position(&window);
-    }
-
-    let monitor = window
+/// Initialize the main window across the active monitor's work area.
+/// Hit-testing via `hittest.rs` ensures that all mouse clicks outside the island
+/// and notes pass through to desktop windows seamlessly.
+pub fn setup_initial_window_position(window: &WebviewWindow) -> Result<(), String> {
+    let current_monitor = window
         .current_monitor()
         .map_err(|e| format!("Failed to get monitor: {}", e))?
         .ok_or_else(|| "No monitor found".to_string())?;
 
-    let scale = monitor.scale_factor();
-    let area = monitor.work_area();
-    let x = area.position.x as f64 / scale;
-    let y = area.position.y as f64 / scale;
-    let width = area.size.width as f64 / scale;
-    let height = area.size.height as f64 / scale;
-
-    if let Some(state) = app.try_state::<crate::hittest::HitTestState>() {
-        if let Ok(mut config_opt) = state.config.lock() {
-            if let Some(config) = &mut *config_opt {
-                if let Some(island) = &mut config.island {
-                    island.x = ((width - island.width) / 2.0).max(0.0);
-                }
-            }
-        }
-    }
-    window
-        .set_size(LogicalSize::new(width, height))
-        .map_err(|e| format!("Set size failed: {}", e))?;
-    window
-        .set_position(LogicalPosition::new(x, y))
-        .map_err(|e| format!("Set pos failed: {}", e))?;
-
-    Ok(())
-}
-
-/// Center the fixed-size island window at the top of the active monitor.
-pub fn setup_initial_window_position(window: &WebviewWindow) -> Result<(), String> {
-    let current_monitor = window
-        .current_monitor()
-        .map_err(|e| format!("Failed to get monitor: {}", e))?;
-
-    let (monitor_width, monitor_x) = match current_monitor {
-        Some(monitor) => {
-            let scale = monitor.scale_factor();
-            let size = monitor.size().to_logical::<f64>(scale);
-            let position = monitor.position().to_logical::<f64>(scale);
-            (size.width, position.x)
-        }
-        None => (1920.0, 0.0),
-    };
-
-    let pos_x = monitor_x + ((monitor_width - WINDOW_WIDTH) / 2.0).max(0.0);
+    let scale = current_monitor.scale_factor();
+    let area = current_monitor.work_area();
+    let monitor_x = area.position.x as f64 / scale;
+    let monitor_y = area.position.y as f64 / scale;
+    let monitor_w = area.size.width as f64 / scale;
+    let monitor_h = area.size.height as f64 / scale;
 
     window
-        .set_size(LogicalSize::new(WINDOW_WIDTH, WINDOW_HEIGHT))
+        .set_size(LogicalSize::new(monitor_w, monitor_h))
         .map_err(|e| format!("Set size failed: {}", e))?;
 
     window
-        .set_position(LogicalPosition::new(pos_x, WINDOW_TOP))
+        .set_position(LogicalPosition::new(monitor_x, monitor_y))
         .map_err(|e| format!("Set pos failed: {}", e))?;
 
     let _ = window.set_always_on_top(true);

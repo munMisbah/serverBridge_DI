@@ -11,11 +11,9 @@ import { ListOrderedIcon } from '@solar-icons/react/bold/list-ordered';
 import { useIsland } from '../../context/IslandContext';
 import { setHitTestForce } from '../../lib/hitTest';
 import { findNoteAnchor, originToViewport, type NoteOrigin } from '../../lib/noteTransition';
-import { paintNoteSnapshot, playGenie } from '../../lib/genie';
 import {
   applyNoteFormat,
   isRichNote,
-  noteSnapshotLines,
   noteToText,
   sanitizeNoteHtml,
   selectionHasTag,
@@ -51,9 +49,6 @@ const LIFT_SPRING = { type: 'spring', stiffness: 430, damping: 30, mass: 0.65 } 
 const FLY_BACK_EASE: [number, number, number, number] = [0.32, 0, 0.2, 1];
 const FLY_BACK_DURATION = 0.34;
 const INTRO_GUARD_MS = 620;
-/** Genie warps run a touch longer than the plain spring fallback. */
-const OPEN_GENIE_MS = 470;
-const CLOSE_GENIE_MS = 430;
 
 type FormatButton = {
   command: NoteFormatCommand;
@@ -101,18 +96,6 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note, origin, closing = 
     numbered: false,
   });
   const [size, setSize] = useState({ w: note.width, h: note.height });
-  // Spec for the canvas snapshot that feeds the genie warp.
-  const plainText = isRichNote(text) ? noteToText(text) : text;
-  const paintSpec = {
-    width: size.w,
-    height: size.h,
-    theme,
-    dots: NOTE_COLORS.map((color) => NOTE_THEME[color].dot),
-    activeDot: NOTE_COLORS.indexOf(note.color),
-    title: plainText.split('\n')[0].trim().slice(0, 28) || 'Catatan kosong',
-    lines: noteSnapshotLines(text),
-    time: formatTime(note.updatedAt),
-  };
   const sizeRef = useRef(size);
   const saveTimer = useRef<number | undefined>(undefined);
   const lastSaved = useRef(note.content);
@@ -126,21 +109,27 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note, origin, closing = 
   const cardRef = useRef<HTMLDivElement>(null);
   // Genie warps need a screenshot, so the real card stays hidden while the
   // canvas owns the pixels.
-  const [genieMode] = useState(() => !settings.reducedMotionEnabled);
-  const [revealed, setRevealed] = useState(
-    () => closing || !origin || settings.reducedMotionEnabled
-  );
+  const [revealed] = useState(true);
 
   const [initial] = useState(() => {
     if (closing) return { x: note.x, y: note.y, scale: 1, opacity: 1, blur: 0 };
-    // Genie: the card sits at its final spot, invisible, until the warp ends.
-    if (genieMode && origin) return { x: note.x, y: note.y, scale: 1, opacity: 0, blur: 0 };
+    if (!origin) {
+      return {
+        x: note.x,
+        y: note.y,
+        scale: reduced ? 1 : 0.88,
+        opacity: 0,
+        blur: reduced ? 0 : 5,
+      };
+    }
+    const anchor = originToViewport(origin);
+    const { w, h } = sizeRef.current;
     return {
-      x: note.x,
-      y: note.y,
-      scale: reduced ? 1 : 0.88,
-      opacity: 0,
-      blur: reduced ? 0 : 5,
+      x: anchor.cx - w / 2,
+      y: anchor.cy - h / 2,
+      scale: Math.min(1, Math.max(origin.w / w, 0.12)),
+      opacity: 0.1,
+      blur: 2,
     };
   });
 
@@ -198,44 +187,11 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note, origin, closing = 
     }, INTRO_GUARD_MS);
 
     if (origin && !reduced) {
-      const el = cardRef.current;
-      if (genieMode && el) {
-        // Target destination of the opening card:
-        // Use note.x and note.y directly because newly created notes mount at (-1, -1)
-        // before cascade placement, so el.getBoundingClientRect() would read the top-left
-        // corner (-1, -1) instead of the note's true destination near the island.
-        const rect = {
-          x: note.x,
-          y: note.y,
-          w: size.w,
-          h: size.h,
-        };
-        const anchor = originToViewport(origin);
-        setRevealed(false);
-
-        const snapshot = paintNoteSnapshot(paintSpec);
-        void playGenie({
-          image: snapshot.image,
-          imgW: snapshot.w,
-          imgH: snapshot.h,
-          rect,
-          point: { x: anchor.cx, y: anchor.cy },
-          direction: 'open',
-          duration: OPEN_GENIE_MS,
-        }).then(() => {
-          opacity.set(1);
-          setRevealed(true);
-        });
-        return;
-      }
-
-      // No card to warp (should not happen): fade in at the final spot.
       animate(x, note.x, LIFT_SPRING);
       animate(y, note.y, LIFT_SPRING);
-      animate(scale, 1, { duration: 0.16 });
-      animate(opacity, 1, { duration: 0.16 });
-      animate(blur, 0, { duration: 0.16 });
-      setRevealed(true);
+      animate(scale, 1, LIFT_SPRING);
+      animate(opacity, 1, { duration: 0.22, ease: 'easeOut' });
+      animate(blur, 0, { duration: 0.24, ease: 'easeOut' });
       return;
     }
 
@@ -266,27 +222,6 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note, origin, closing = 
       return;
     }
 
-    const el = cardRef.current;
-    if (genieMode && el) {
-      const rect = el.getBoundingClientRect();
-      const anchor = findNoteAnchor(note.id);
-      const target = anchor
-        ? originToViewport(anchor)
-        : { cx: window.innerWidth / 2, cy: 0 };
-
-      const snapshot = paintNoteSnapshot(paintSpec);
-      opacity.set(0);
-      void playGenie({
-        image: snapshot.image,
-        imgW: snapshot.w,
-        imgH: snapshot.h,
-        rect: { x: rect.x, y: rect.y, w: rect.width, h: rect.height },
-        point: { x: target.cx, y: target.cy },
-        direction: 'minimize',
-        duration: CLOSE_GENIE_MS,
-      });
-      return;
-    }
 
     const { w, h } = sizeRef.current;
     const anchor = findNoteAnchor(note.id);
@@ -301,8 +236,8 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note, origin, closing = 
     animate(x, target.x, { duration: FLY_BACK_DURATION, ease: FLY_BACK_EASE });
     animate(y, target.y, { duration: FLY_BACK_DURATION, ease: FLY_BACK_EASE });
     animate(scale, target.scale, { duration: FLY_BACK_DURATION, ease: FLY_BACK_EASE });
-    animate(opacity, 0, { duration: 0.24, delay: 0.1, ease: 'easeIn' });
-    animate(blur, 7, { duration: 0.28, ease: 'easeIn' });
+    animate(opacity, 0, { duration: 0.24, ease: 'easeIn' });
+    animate(blur, 4, { duration: 0.26, ease: 'easeIn' });
   }, [closing, note.id, x, y, scale, opacity, blur]);
 
   const commitHtml = (value: string) => {
@@ -565,6 +500,7 @@ export const StickyNote: React.FC<StickyNoteProps> = ({ note, origin, closing = 
     handle.addEventListener('lostpointercapture', finish);
   };
 
+  const plainText = isRichNote(text) ? noteToText(text) : text;
   const title = plainText.split('\n')[0].trim().slice(0, 28) || 'Catatan kosong';
 
   return (

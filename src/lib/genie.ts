@@ -122,20 +122,6 @@ const drawTask = (
     );
   }
 
-  // A soft flash at the anchor sells the "sucked into the list" moment.
-  const glow = 1 - p;
-  if (glow > 0.72) {
-    const glowProgress = (glow - 0.72) / 0.28;
-    const alpha = (1 - (1 - glowProgress) * (1 - glowProgress)) * 0.28;
-    if (alpha > 0.01) {
-      const radius = 54;
-      const gradient = c.createRadialGradient(point.x, point.y, 0, point.x, point.y, radius);
-      gradient.addColorStop(0, `rgba(255,255,255,${alpha.toFixed(3)})`);
-      gradient.addColorStop(1, 'rgba(255,255,255,0)');
-      c.fillStyle = gradient;
-      c.fillRect(point.x - radius, point.y - radius, radius * 2, radius * 2);
-    }
-  }
 };
 
 const frame = (now: number) => {

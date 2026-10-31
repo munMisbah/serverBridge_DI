@@ -5,14 +5,9 @@ import { peekNoteOrigin } from '../../lib/noteTransition';
 import type { NoteItem } from '../../types';
 import { StickyNote } from './StickyNote';
 
-const isTauri =
-  typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-
 const CASCADE_STEP = 26;
 /** Keep a card mounted long enough to fly back into its row. */
 const CLOSE_ANIMATION_MS = 720;
-/** The window must not shrink while a card is still flying home. */
-const WINDOW_SHRINK_DELAY = 760;
 
 /**
  * Floating sticky notes layer.
@@ -25,49 +20,11 @@ const WINDOW_SHRINK_DELAY = 760;
 export const NotesLayer: React.FC = () => {
   const { notes, updateNote } = useIsland();
   const openNotes = useMemo(() => notes.filter((n) => !n.minimized), [notes]);
-  const [layerReady, setLayerReady] = useState(!isTauri);
+  const [layerReady] = useState(true);
   // Cards that just got minimized/deleted, kept mounted while they fly home.
   const [closingNotes, setClosingNotes] = useState<NoteItem[]>([]);
-  const wasOpen = useRef(false);
   const previousOpen = useRef<NoteItem[]>([]);
   const closeTimers = useRef<number[]>([]);
-
-  // Grow / shrink the native window around the notes.
-  useEffect(() => {
-    if (!isTauri) return;
-
-    if (openNotes.length > 0) {
-      if (wasOpen.current) return;
-      wasOpen.current = true;
-
-      import('@tauri-apps/api/core')
-        .then(({ invoke }) => invoke('set_notes_layer_mode', { enabled: true }))
-        // Wait for the webview to adopt its new viewport before placing cards.
-        .then(() => {
-          requestAnimationFrame(() =>
-            requestAnimationFrame(() => {
-              if (wasOpen.current) setLayerReady(true);
-            })
-          );
-        })
-        .catch((err) => {
-          console.debug('Unable to enable notes layer:', err);
-          if (wasOpen.current) setLayerReady(true);
-        });
-      return;
-    }
-
-    if (!wasOpen.current) return;
-    wasOpen.current = false;
-
-    const timer = window.setTimeout(() => {
-      setLayerReady(false);
-      import('@tauri-apps/api/core')
-        .then(({ invoke }) => invoke('set_notes_layer_mode', { enabled: false }))
-        .catch((err) => console.debug('Unable to disable notes layer:', err));
-    }, WINDOW_SHRINK_DELAY);
-    return () => window.clearTimeout(timer);
-  }, [openNotes.length]);
 
   // Track notes leaving the open set so they can animate out instead of popping.
   useEffect(() => {
