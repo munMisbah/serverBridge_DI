@@ -46,19 +46,19 @@ export const NoteList: React.FC = () => {
         <div className="flex items-center gap-0.5">
           <button
             type="button"
-            title="Buka semua note"
+            aria-label="Buka semua note"
             onClick={() => {
               rememberRowOrigins();
               openAllNotes();
             }}
-            disabled={notes.length === 0}
+            disabled={notes.length === 0 || openCount === notes.length}
             className="flex h-5 w-5 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-25 disabled:hover:bg-transparent"
           >
             <MaximizeSquareIcon size={12} />
           </button>
           <button
             type="button"
-            title="Minimize semua note"
+            aria-label="Minimize semua note"
             onClick={minimizeAllNotes}
             disabled={openCount === 0}
             className="flex h-5 w-5 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-25 disabled:hover:bg-transparent"
@@ -67,7 +67,7 @@ export const NoteList: React.FC = () => {
           </button>
           <button
             type="button"
-            title="Note baru"
+            aria-label="Note baru"
             onClick={(e) => {
               const id = createNote();
               rememberNoteOrigin(id, e.currentTarget);
@@ -107,7 +107,7 @@ export const NoteList: React.FC = () => {
                     toggleNote(note.id);
                   }
                 }}
-                title={note.minimized ? 'Buka note' : 'Minimize note'}
+                aria-label={note.minimized ? 'Buka note' : 'Minimize note'}
                 className="group flex w-full cursor-pointer items-start gap-1.5 rounded-xl bg-white/[0.03] px-2 py-1.5 text-left transition-all hover:bg-white/[0.07]"
               >
                 <span
@@ -129,7 +129,7 @@ export const NoteList: React.FC = () => {
 
                 <button
                   type="button"
-                  title="Hapus note"
+                  aria-label="Hapus note"
                   onClick={(e) => {
                     e.stopPropagation();
                     deleteNote(note.id);

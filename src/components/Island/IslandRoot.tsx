@@ -26,6 +26,7 @@ export const IslandRoot: React.FC = () => {
 
   const stateRef = useRef(state);
   const triggerRef = useRef(settings.expandTrigger);
+  const isHoveredRef = useRef(false);
 
   const isTauri =
     typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
@@ -75,10 +76,11 @@ export const IslandRoot: React.FC = () => {
 
   const handleHoverChange = useCallback(
     (hovered: boolean) => {
+      isHoveredRef.current = hovered;
+
       if (triggerRef.current !== 'hover') {
         return;
       }
-
       if (hovered && stateRef.current === 'compact') {
         scheduleExpand();
       } else if (!hovered && stateRef.current === 'expanded') {
@@ -159,6 +161,9 @@ export const IslandRoot: React.FC = () => {
     document.addEventListener('pointerdown', handlePointerDown);
 
     const handleWindowBlur = () => {
+      // If the mouse is still hovering over the island, do not collapse.
+      // A blur event while mouse is inside is caused by tooltips or internal element focus shifts.
+      if (isHoveredRef.current) return;
       if (isTauri && state === 'expanded') {
         setState('compact');
       }

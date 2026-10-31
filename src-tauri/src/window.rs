@@ -34,8 +34,6 @@ pub fn set_notes_layer_mode(app: tauri::AppHandle, enabled: bool) -> Result<(), 
         .get_webview_window("main")
         .ok_or_else(|| "Main window not found".to_string())?;
 
-    // Never swallow desktop clicks while the transparent surface changes size.
-    let _ = window.set_ignore_cursor_events(true);
 
     if !enabled {
         return setup_initial_window_position(&window);
