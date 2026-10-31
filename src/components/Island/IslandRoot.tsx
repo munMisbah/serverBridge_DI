@@ -15,7 +15,7 @@ const HOVER_EXPAND_DELAY = 30;
 const HOVER_COLLAPSE_DELAY = 120;
 const NOTCH_EAR_RADIUS = 14;
 export const IslandRoot: React.FC = () => {
-  const { state, setState, activeNotification, settings, audioPlayback, activeTab, isSettingsOpen } = useIsland();
+  const { state, setState, activeNotification, settings, audioPlayback, activeTab } = useIsland();
   const islandRef = useRef<HTMLDivElement>(null);
 
   const hoverExpandTimer = useRef<number | undefined>(undefined);
@@ -126,19 +126,18 @@ export const IslandRoot: React.FC = () => {
     const x = Math.max(0, (viewportWidth - dimensions.width) / 2);
 
     import('@tauri-apps/api/core')
-      .then(({ invoke }) => {
-        const isFullInteractive = state === 'expanded' || (!isTauri && isSettingsOpen);
-        return invoke('set_island_hit_rect', {
-          x: isFullInteractive ? 0 : x,
-          y: isFullInteractive ? 0 : dimensions.top,
-          width: isFullInteractive ? (window.innerWidth || 660) : dimensions.width,
-          height: isFullInteractive ? (window.innerHeight || 420) : dimensions.height,
-        });
-      })
-    .catch((err) => {
-      console.debug('Unable to update island hit rect:', err);
-    });
-  }, [dimensions.height, dimensions.width, dimensions.top, isTauri, state, activeTab, isSettingsOpen]);
+      .then(({ invoke }) =>
+        invoke('set_island_hit_rect', {
+          x,
+          y: dimensions.top,
+          width: dimensions.width,
+          height: dimensions.height,
+        })
+      )
+      .catch((err) => {
+        console.debug('Unable to update island hit rect:', err);
+      });
+  }, [dimensions.height, dimensions.width, dimensions.top, isTauri, state, activeTab]);
 
   // Collapse when clicking outside (browser) or when the Tauri window loses focus.
   useEffect(() => {
@@ -196,8 +195,8 @@ export const IslandRoot: React.FC = () => {
   const islandBg = opacity < 1 ? `rgba(0, 0, 0, ${opacity})` : '#000000';
   return (
     <>
-      {/* Backdrop overlay for click-outside to collapse when expanded */}
-      {state === 'expanded' && (
+      {/* Backdrop overlay for click-outside to collapse when expanded (browser preview only) */}
+      {!isTauri && state === 'expanded' && (
         <div
           className="pointer-events-auto fixed inset-0 z-40 cursor-default bg-transparent"
           onPointerDown={(e) => {
