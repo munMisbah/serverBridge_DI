@@ -16,28 +16,44 @@ pub struct CursorPositionPayload {
     pub y: f64,
 }
 
+/// One snapshot of the frontend layout:
+/// - `island` drives both hover detection and interactivity
+/// - `interactive` holds floating note rects (click-through is disabled there)
+/// - `force` keeps the whole window interactive while dragging/resizing a note
+#[derive(Debug, Clone, Default)]
+pub struct HitTestConfig {
+    pub island: Option<HitRect>,
+    pub interactive: Vec<HitRect>,
+    pub force: bool,
+}
+
 /// Logical island bounds (CSS pixels, relative to the window client area).
 /// The native loop uses this to decide whether the window should receive
 /// cursor events or pass them through to the desktop.
 #[derive(Clone, Default)]
 pub struct HitTestState {
-    pub rect: Arc<Mutex<Option<HitRect>>>,
+    pub config: Arc<Mutex<Option<HitTestConfig>>>,
+}
+
+fn contains(rect: &HitRect, x: f64, y: f64, slop: f64) -> bool {
+    x >= rect.x - slop
+        && x < rect.x + rect.width + slop
+        && y >= rect.y - slop
+        && y < rect.y + rect.height + slop
 }
 
 #[tauri::command]
-pub fn set_island_hit_rect(
+pub fn set_hit_test_config(
     state: tauri::State<'_, HitTestState>,
-    x: f64,
-    y: f64,
-    width: f64,
-    height: f64,
+    island: Option<HitRect>,
+    interactive: Vec<HitRect>,
+    force: bool,
 ) {
-    if let Ok(mut rect) = state.rect.lock() {
-        *rect = Some(HitRect {
-            x,
-            y,
-            width,
-            height,
+    if let Ok(mut config) = state.config.lock() {
+        *config = Some(HitTestConfig {
+            island,
+            interactive,
+            force,
         });
     }
 }
@@ -53,7 +69,7 @@ pub fn start_hit_test_loop(app: AppHandle) {
     let Some(state) = app.try_state::<HitTestState>() else {
         return;
     };
-    let rect_state = state.rect.clone();
+    let config_state = state.config.clone();
     drop(state);
 
     std::thread::spawn(move || {
@@ -96,12 +112,12 @@ pub fn start_hit_test_loop(app: AppHandle) {
                 }
             }
 
-            let rect = match rect_state.lock() {
-                Ok(guard) => *guard,
+            let config = match config_state.lock() {
+                Ok(guard) => guard.clone(),
                 Err(_) => break,
             };
 
-            let Some(rect) = rect else {
+            let Some(config) = config else {
                 if !ignored {
                     if window.set_ignore_cursor_events(true).is_ok() {
                         ignored = true;
@@ -111,18 +127,30 @@ pub fn start_hit_test_loop(app: AppHandle) {
                 continue;
             };
 
+            // Hover only follows the island (not floating notes), so hovering a
+            // note never expands the island by accident.
             let slop = if hovered { 2.0 } else { 0.0 };
-            let is_hovered = local_x >= rect.x - slop
-                && local_x < rect.x + rect.width + slop
-                && local_y >= rect.y - slop
-                && local_y < rect.y + rect.height + slop;
+            let is_hovered = config
+                .island
+                .map(|rect| contains(&rect, local_x, local_y, slop))
+                .unwrap_or(false);
 
             if is_hovered != hovered {
                 hovered = is_hovered;
                 let _ = window.emit("island-hover", hovered);
             }
 
-            let should_ignore = !is_hovered;
+            let is_interactive = config.force
+                || config
+                    .island
+                    .map(|rect| contains(&rect, local_x, local_y, 0.0))
+                    .unwrap_or(false)
+                || config
+                    .interactive
+                    .iter()
+                    .any(|rect| contains(rect, local_x, local_y, 0.0));
+
+            let should_ignore = !is_interactive;
             if should_ignore != ignored {
                 if window.set_ignore_cursor_events(should_ignore).is_ok() {
                     ignored = should_ignore;
