@@ -200,9 +200,26 @@ export const IslandRoot: React.FC = () => {
         mass: 0.7,
       };
 
-  const opacity = (settings.backgroundOpacity ?? 80) / 100;
+  const opacity = (settings.backgroundOpacity ?? 85) / 100;
   const blur = settings.backgroundBlur ?? 20;
-  const islandBg = opacity < 1 ? `rgba(0, 0, 0, ${opacity})` : '#000000';
+  const isGlass = opacity < 1;
+
+  // Authentic Frosted Glass & Acrylic Material:
+  // Windows DWM cannot capture background pixels through a transparent webview.
+  // We simulate real optical glass with a refractive multi-stop dark gradient,
+  // specular overhead bevel highlights, ambient internal glow, and high-frequency frosted grain.
+  const glassGradient = isGlass
+    ? `linear-gradient(135deg, rgba(28, 30, 38, ${Math.min(0.96, opacity * 0.96)}) 0%, rgba(14, 16, 22, ${Math.min(0.94, opacity * 0.92)}) 45%, rgba(7, 8, 12, ${Math.min(0.98, opacity * 0.99)}) 100%)`
+    : '#000000';
+
+  const islandBg = isGlass ? `rgba(10, 11, 15, ${opacity})` : '#000000';
+
+  const glassBorder = isGlass ? '1px solid rgba(255, 255, 255, 0.12)' : 'none';
+  const glassBorderTop = isGlass ? '1px solid rgba(255, 255, 255, 0.24)' : 'none';
+
+  const glassShadow = isGlass
+    ? 'inset 0 1px 1px 0 rgba(255, 255, 255, 0.22), inset 0 0 18px 0 rgba(255, 255, 255, 0.04), inset 0 -1px 1px 0 rgba(0, 0, 0, 0.6), 0 16px 36px -4px rgba(0, 0, 0, 0.65), 0 4px 12px -2px rgba(0, 0, 0, 0.45)'
+    : '0 8px 24px -4px rgba(0, 0, 0, 0.7), 0 2px 8px -1px rgba(0, 0, 0, 0.5)';
   return (
     <>
       {/* Backdrop overlay for click-outside to collapse when expanded (browser preview only) */}
@@ -284,13 +301,12 @@ export const IslandRoot: React.FC = () => {
           <motion.div
             className="relative h-full w-full overflow-hidden text-white"
             style={{
-              backgroundColor: islandBg,
-              backdropFilter: blur > 0 ? `blur(${blur}px) saturate(180%)` : 'none',
-              WebkitBackdropFilter: blur > 0 ? `blur(${blur}px) saturate(180%)` : 'none',
-              boxShadow:
-                opacity < 1
-                  ? '0 8px 20px -4px rgba(0, 0, 0, 0.55), 0 3px 8px -2px rgba(0, 0, 0, 0.35)'
-                  : '0 6px 16px -4px rgba(0, 0, 0, 0.5), 0 2px 6px -1px rgba(0, 0, 0, 0.35)',
+              background: glassGradient,
+              border: glassBorder,
+              borderTop: glassBorderTop,
+              boxShadow: glassShadow,
+              backdropFilter: blur > 0 ? `blur(${blur}px) saturate(180%)` : undefined,
+              WebkitBackdropFilter: blur > 0 ? `blur(${blur}px) saturate(180%)` : undefined,
               willChange: 'border-radius',
             }}
             animate={{
@@ -298,6 +314,20 @@ export const IslandRoot: React.FC = () => {
             }}
             transition={transition}
           >
+            {/* Frosted Glass Micro-Grain Texture (Tactile Diffusion) */}
+            {isGlass && blur > 0 && (
+              <div
+                className="pointer-events-none absolute inset-0 z-0 opacity-[0.045] mix-blend-overlay"
+                style={{
+                  backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
+                }}
+              />
+            )}
+
+            {/* Specular Overhead Glare Line (Apple Ambient Sheen) */}
+            {isGlass && (
+              <div className="pointer-events-none absolute inset-x-6 top-0 z-10 h-[1px] bg-gradient-to-r from-transparent via-white/35 to-transparent" />
+            )}
             <AnimatePresence initial={false} mode="sync">
               <motion.div
                 key={state}
