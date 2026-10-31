@@ -717,15 +717,23 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, [pushNotification, updateSettings]);
 
-  // Sync settings with native Tauri backend
+  // Sync always-on-top with native Tauri backend
   useEffect(() => {
     if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
       import('@tauri-apps/api/core').then(({ invoke }) => {
         invoke('set_always_on_top', { enabled: settings.alwaysOnTopEnabled }).catch(console.error);
+      });
+    }
+  }, [settings.alwaysOnTopEnabled]);
+
+  // Sync autostart with native Tauri backend
+  useEffect(() => {
+    if (typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window) {
+      import('@tauri-apps/api/core').then(({ invoke }) => {
         invoke('set_autostart_enabled', { enabled: settings.autostartEnabled }).catch(console.error);
       });
     }
-  }, [settings.alwaysOnTopEnabled, settings.autostartEnabled]);
+  }, [settings.autostartEnabled]);
 
   const dismissNotification = useCallback((id?: string) => {
     clearTimeout(dismissTimerRef.current);
