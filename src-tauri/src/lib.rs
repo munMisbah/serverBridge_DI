@@ -257,7 +257,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             window::set_always_on_top,
-            hittest::set_island_hit_rect,
+            hittest::set_hit_test_config,
+            window::set_notes_layer_mode,
             notifications::check_notification_permission,
             notifications::request_notification_permission,
             notifications::start_notification_listener,

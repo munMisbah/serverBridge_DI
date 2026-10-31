@@ -17,6 +17,23 @@ export interface TodoItem {
   createdAt: number;
 }
 
+export type NoteColor = 'yellow' | 'pink' | 'blue' | 'green' | 'purple';
+
+export interface NoteItem {
+  id: string;
+  content: string;
+  color: NoteColor;
+  /** Position in viewport CSS px. -1 means "place me automatically". */
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  minimized: boolean;
+  z: number;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export type ClipboardItemType = 'text' | 'image';
 
 export interface ClipboardItem {

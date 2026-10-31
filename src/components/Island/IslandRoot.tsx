@@ -10,12 +10,16 @@ import { CompactView } from './CompactView';
 import { NotificationView } from './NotificationView';
 import { ExpandedView } from './ExpandedView';
 import { getIslandDimensions } from './dimensions';
+import { setIslandHitRect } from '../../lib/hitTest';
+import { NotesLayer } from '../Notes/NotesLayer';
 
 const HOVER_EXPAND_DELAY = 30;
 const HOVER_COLLAPSE_DELAY = 120;
 const NOTCH_EAR_RADIUS = 14;
 export const IslandRoot: React.FC = () => {
-  const { state, setState, activeNotification, settings, audioPlayback, activeTab, isSettingsOpen } = useIsland();
+  const { state, setState, activeNotification, settings, audioPlayback, activeTab, notes } =
+    useIsland();
+  const notesOpen = notes.some((note) => !note.minimized);
   const islandRef = useRef<HTMLDivElement>(null);
 
   const hoverExpandTimer = useRef<number | undefined>(undefined);
@@ -118,35 +122,46 @@ export const IslandRoot: React.FC = () => {
     };
   }, [handleHoverChange, isTauri]);
 
-  // Keep the native click-through hit rect in sync with the fixed island size.
+  // Keep the native click-through hit rect in sync with the island size.
+  // Floating notes register their own rects through the hit-test bridge.
   useEffect(() => {
     if (!isTauri) return;
 
-    const viewportWidth = window.innerWidth || 660;
-    const x = Math.max(0, (viewportWidth - dimensions.width) / 2);
+    const updateIslandRect = () => {
+      const vw = window.innerWidth || 700;
+      const vh = window.innerHeight || 420;
 
-    import('@tauri-apps/api/core')
-      .then(({ invoke }) => {
-        const isFullInteractive = state === 'expanded' || (!isTauri && isSettingsOpen);
-        return invoke('set_island_hit_rect', {
-          x: isFullInteractive ? 0 : x,
-          y: isFullInteractive ? 0 : dimensions.top,
-          width: isFullInteractive ? (window.innerWidth || 660) : dimensions.width,
-          height: isFullInteractive ? (window.innerHeight || 420) : dimensions.height,
-        });
-      })
-    .catch((err) => {
-      console.debug('Unable to update island hit rect:', err);
-    });
-  }, [dimensions.height, dimensions.width, dimensions.top, isTauri, state, activeTab, isSettingsOpen]);
+      // While expanded with no floating note, keep the original behaviour:
+      // the whole window captures clicks so click-outside collapses the island.
+      // With a note open the window spans the work area and must stay
+      // click-through outside the island + note rects.
+      if (state === 'expanded' && !notesOpen) {
+        setIslandHitRect({ x: 0, y: 0, width: vw, height: vh });
+        return;
+      }
+
+      setIslandHitRect({
+        x: Math.max(0, (vw - dimensions.width) / 2),
+        y: dimensions.top,
+        width: dimensions.width,
+        height: dimensions.height,
+      });
+    };
+
+    updateIslandRect();
+    window.addEventListener('resize', updateIslandRect);
+    return () => window.removeEventListener('resize', updateIslandRect);
+  }, [dimensions.height, dimensions.width, dimensions.top, isTauri, state, notesOpen]);
 
   // Collapse when clicking outside (browser) or when the Tauri window loses focus.
   useEffect(() => {
     const handlePointerDown = (e: PointerEvent) => {
+      const target = e.target as HTMLElement | null;
       if (
         state === 'expanded' &&
         islandRef.current &&
-        !islandRef.current.contains(e.target as Node)
+        !islandRef.current.contains(e.target as Node) &&
+        !target?.closest?.('[data-notes-layer]')
       ) {
         setState('compact');
       }
@@ -211,6 +226,7 @@ export const IslandRoot: React.FC = () => {
       <div className="pointer-events-none fixed inset-x-0 top-0 z-50 flex justify-center">
         <motion.div
           ref={islandRef}
+          data-island
           className="pointer-events-auto relative select-none text-white"
           style={{
             willChange: 'width, height, transform',
@@ -306,6 +322,9 @@ export const IslandRoot: React.FC = () => {
           </motion.div>
         </motion.div>
       </div>
+
+      {/* Floating sticky notes (rendered above the island, outside its clip) */}
+      <NotesLayer />
     </>
   );
 };

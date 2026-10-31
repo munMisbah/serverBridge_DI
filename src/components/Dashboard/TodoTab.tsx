@@ -4,6 +4,7 @@ import { CheckCircleIcon } from '@solar-icons/react/bold/check-circle';
 import { CheckIcon } from '@solar-icons/react/bold/check';
 import { TrashBinTrashIcon } from '@solar-icons/react/bold/trash-bin-trash';
 import { useIsland } from '../../context/IslandContext';
+import { NoteList } from './NoteList';
 
 export const TodoTab: React.FC = () => {
   const { todos, addTodo, toggleTodo, deleteTodo } = useIsland();
@@ -202,6 +203,14 @@ export const TodoTab: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Separator */}
+      <div className="flex w-2 shrink-0 items-center justify-center self-stretch">
+        <div className="h-full w-px bg-white/10" />
+      </div>
+
+      {/* RIGHT COLUMN: Sticky note list */}
+      <NoteList />
     </div>
   );
 };

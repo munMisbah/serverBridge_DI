@@ -36,6 +36,14 @@
   select {
     user-select: text;
   }
+
+  /* The editor and everything it contains must be selectable: Chromium sends
+     keystrokes to the editor root when the caret sits in a user-select: none
+     block, which silently drops text into the wrong element. */
+  .note-editor,
+  .note-editor * {
+    user-select: text;
+  }
 }
 
 /* Custom subtle scrollbar */
@@ -59,4 +67,56 @@ svg.solar {
   vertical-align: middle;
   flex-shrink: 0;
   pointer-events: none;
+}
+
+/* Sticky note editor: the DOM is contenteditable, so block styles live here. */
+.note-editor {
+  cursor: text;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/* `:empty` never matches once a caret host <br> exists, so the component
+   flags emptiness explicitly via data-empty.
+   Sembunyikan placeholder saat editor mendapat fokus agar kursor teks tidak
+   menimpa teks placeholder. Saat blur dan masih kosong, placeholder tampil kembali. */
+.note-editor[data-empty='true']:not(:focus)::before {
+  content: attr(data-placeholder);
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+.note-editor h1,
+.note-editor h2,
+.note-editor h3 {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  margin: 2px 0 1px;
+}
+
+.note-editor ul,
+.note-editor ol {
+  margin: 2px 0;
+  padding-left: 16px;
+}
+
+.note-editor ul {
+  list-style: disc outside;
+}
+
+.note-editor ol {
+  list-style: decimal outside;
+}
+
+.note-editor li {
+  margin: 0;
+}
+
+.note-editor li::marker {
+  opacity: 0.6;
+}
+
+.note-editor div {
+  min-height: 19px;
 }

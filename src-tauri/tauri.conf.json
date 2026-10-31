@@ -14,7 +14,7 @@
       {
         "title": "Dynamic Island",
         "label": "main",
-        "width": 660,
+        "width": 700,
         "height": 420,
         "resizable": false,
         "fullscreen": false,

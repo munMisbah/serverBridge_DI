@@ -1,4 +1,5 @@
 import { DEFAULT_WEATHER_LOCATION } from '../utils/locations';
+import { NOTE_COLORS, NOTE_DEFAULT_HEIGHT, NOTE_DEFAULT_WIDTH } from '../utils/notes';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import {
   IslandState,
@@ -10,6 +11,7 @@ import {
   ClipboardItem,
   ActiveTab,
   TodoItem,
+  NoteItem,
 } from '../types';
 
 interface IslandContextType {
@@ -46,6 +48,14 @@ interface IslandContextType {
   toggleTodo: (id: string) => void;
   deleteTodo: (id: string) => void;
   clearCompletedTodos: () => void;
+  notes: NoteItem[];
+  createNote: () => string;
+  updateNote: (id: string, patch: Partial<NoteItem>) => void;
+  deleteNote: (id: string) => void;
+  toggleNote: (id: string) => void;
+  openAllNotes: () => void;
+  minimizeAllNotes: () => void;
+  bringNoteToFront: (id: string) => void;
 }
 
 const DEFAULT_SETTINGS: UserSettings = {
@@ -254,6 +264,18 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return DEFAULT_TODOS;
     }
   });
+  const [notes, setNotes] = useState<NoteItem[]>(() => {
+    try {
+      const saved = localStorage.getItem('di_notes');
+      if (!saved) return [];
+      const parsed = JSON.parse(saved) as NoteItem[];
+      if (!Array.isArray(parsed)) return [];
+      // Notes always start folded into the list so the island stays compact on launch.
+      return parsed.map((n) => ({ ...n, minimized: true }));
+    } catch {
+      return [];
+    }
+  });
   const [audioPlayback, setAudioPlayback] = useState<AudioPlaybackState | null>(DEFAULT_AUDIO_PLAYBACK);
   const dismissTimerRef = useRef<number | undefined>(undefined);
   const settingsRef = useRef(settings);
@@ -334,6 +356,39 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       console.error('Failed to persist todos:', err);
     }
   }, [todos]);
+
+  // Save notes to local storage (debounced: typing must not write per keystroke)
+  const notesPersistTimer = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    clearTimeout(notesPersistTimer.current);
+    notesPersistTimer.current = window.setTimeout(() => {
+      try {
+        localStorage.setItem('di_notes', JSON.stringify(notes));
+      } catch (err) {
+        console.error('Failed to persist notes:', err);
+      }
+    }, 250);
+    return () => clearTimeout(notesPersistTimer.current);
+  }, [notes]);
+
+  // Never lose the last debounced edit when the app closes.
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
+  useEffect(() => {
+    const flush = () => {
+      try {
+        localStorage.setItem('di_notes', JSON.stringify(notesRef.current));
+      } catch {
+        // Storage can be unavailable; nothing else to do here.
+      }
+    };
+    window.addEventListener('beforeunload', flush);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      window.removeEventListener('beforeunload', flush);
+      window.removeEventListener('pagehide', flush);
+    };
+  }, []);
 
   // Weather fetching with Open-Meteo
   const refreshWeather = useCallback(async () => {
@@ -803,6 +858,69 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const clearCompletedTodos = useCallback(() => {
     setTodos((prev) => prev.filter((t) => !t.completed));
   }, []);
+
+  const createNote = useCallback(() => {
+    const now = Date.now();
+    const id = `note-${now}-${Math.random().toString(36).slice(2, 6)}`;
+    setNotes((prev) => [
+      ...prev,
+      {
+        id,
+        content: '',
+        color: NOTE_COLORS[prev.length % NOTE_COLORS.length],
+        x: -1,
+        y: -1,
+        width: NOTE_DEFAULT_WIDTH,
+        height: NOTE_DEFAULT_HEIGHT,
+        minimized: false,
+        z: prev.reduce((max, n) => Math.max(max, n.z), 0) + 1,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ]);
+    return id;
+  }, []);
+
+  const updateNote = useCallback((id: string, patch: Partial<NoteItem>) => {
+    setNotes((prev) =>
+      prev.map((n) => (n.id === id ? { ...n, ...patch, updatedAt: Date.now() } : n))
+    );
+  }, []);
+
+  const deleteNote = useCallback((id: string) => {
+    setNotes((prev) => prev.filter((n) => n.id !== id));
+  }, []);
+
+  const toggleNote = useCallback((id: string) => {
+    setNotes((prev) => {
+      const maxZ = prev.reduce((max, n) => Math.max(max, n.z), 0);
+      return prev.map((n) =>
+        n.id === id
+          ? { ...n, minimized: !n.minimized, z: maxZ + 1, updatedAt: Date.now() }
+          : n
+      );
+    });
+  }, []);
+
+  const openAllNotes = useCallback(() => {
+    setNotes((prev) => {
+      let z = prev.reduce((max, n) => Math.max(max, n.z), 0) + 1;
+      return prev.map((n) => (n.minimized ? { ...n, minimized: false, z: z++ } : n));
+    });
+  }, []);
+
+  const minimizeAllNotes = useCallback(() => {
+    setNotes((prev) => prev.map((n) => (n.minimized ? n : { ...n, minimized: true })));
+  }, []);
+
+  const bringNoteToFront = useCallback((id: string) => {
+    setNotes((prev) => {
+      const maxZ = prev.reduce((max, n) => Math.max(max, n.z), 0);
+      const target = prev.find((n) => n.id === id);
+      if (!target || target.z === maxZ) return prev;
+      return prev.map((n) => (n.id === id ? { ...n, z: maxZ + 1 } : n));
+    });
+  }, []);
   return (
     <IslandContext.Provider
       value={{
@@ -839,6 +957,14 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         toggleTodo,
         deleteTodo,
         clearCompletedTodos,
+        notes,
+        createNote,
+        updateNote,
+        deleteNote,
+        toggleNote,
+        openAllNotes,
+        minimizeAllNotes,
+        bringNoteToFront,
       }}
     >
       {children}
