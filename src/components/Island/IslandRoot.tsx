@@ -39,10 +39,12 @@ export const IslandRoot: React.FC = () => {
   const intelligentDodgeEnabled = settings.intelligentDodgeEnabled ?? true;
   const dimensions = getIslandDimensions(islandStyle, state, isPlaying, activeTab);
 
-  // When dodged, tuck the island up into the top screen edge, leaving only a subtle ~5px peek rim
+  // When dodged, tuck the island up into the top screen edge, leaving only a subtle ~5px peek rim.
+  // Dodge only applies in compact state; expanded dashboard and notifications stay visible.
   const PEEK_RIM_VISIBLE = 5;
   const dodgedY = -dimensions.height + PEEK_RIM_VISIBLE;
-  const effectiveY = isDodged && intelligentDodgeEnabled ? dodgedY : dimensions.top;
+  const canDodge = state === 'compact';
+  const effectiveY = isDodged && intelligentDodgeEnabled && canDodge ? dodgedY : dimensions.top;
 
   useLayoutEffect(() => {
     stateRef.current = state;
@@ -179,7 +181,7 @@ export const IslandRoot: React.FC = () => {
     const updateIslandRect = () => {
       const vw = window.innerWidth || 700;
       const width = dimensions.width;
-      const isCurrentlyDodged = isDodged && intelligentDodgeEnabled;
+      const isCurrentlyDodged = isDodged && intelligentDodgeEnabled && state === 'compact';
       // When dodged, shrink the native hit-rect to just the peek rim at the screen ceiling.
       // This immediately allows click-through to background browser tabs!
       const height = isCurrentlyDodged ? PEEK_RIM_VISIBLE + 2 : dimensions.height + dimensions.top;

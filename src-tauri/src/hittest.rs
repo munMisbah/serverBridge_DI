@@ -149,6 +149,15 @@ pub fn start_hit_test_loop(app: AppHandle) {
     drop(state);
 
     std::thread::spawn(move || {
+        #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+        enum DodgeState {
+            Idle,
+            Dodged,
+            Revealed,
+        }
+
+        let mut dodge_state = DodgeState::Idle;
+        let mut normal_island_rect: Option<HitRect> = None;
         let mut hovered = false;
         let mut dodged = false;
         let mut ignored = false;
@@ -205,34 +214,73 @@ pub fn start_hit_test_loop(app: AppHandle) {
                 continue;
             };
 
-            // Hover only follows the island (not floating notes), so hovering a
-            // note never expands the island by accident.
-            let slop = if hovered { 4.0 } else { 0.0 };
-            let is_hovered = config
-                .island
-                .map(|rect| contains(&rect, local_x, local_y, slop))
+            if let Some(island) = config.island {
+                if island.height > 15.0 {
+                    normal_island_rect = Some(island);
+                }
+            }
+
+            let dodge_zone = normal_island_rect.or(config.island);
+            let in_dodge_zone = dodge_zone
+                .map(|rect| {
+                    local_x >= rect.x - 4.0
+                        && local_x < rect.x + rect.width + 4.0
+                        && local_y >= 0.0
+                        && local_y < (rect.height.max(40.0) + 4.0)
+                })
                 .unwrap_or(false);
 
-            // Intelligent Dodge detection:
-            // When the mouse is over the island area, check if there is an active application
-            // window (e.g. Chrome, Edge browser with top tabs) directly behind the island.
-            // If so, emit `island-dodge` = true unless the cursor is pushed right up to the very
-            // top edge (local_y <= 5.0) where the user touches the peek rim to intentionally reveal it.
             let is_touching_peek_edge = local_y <= 5.0;
-            let should_dodge = if is_hovered {
-                if is_touching_peek_edge {
-                    false
-                } else {
-                    is_background_app_window_at(cursor.x as i32, cursor.y as i32, my_hwnd)
-                }
-            } else {
-                false
-            };
 
-            if should_dodge != dodged {
-                dodged = should_dodge;
+            // State Machine transitions for Intelligent Dodge:
+            // Prevents rapid up-and-down oscillation by decoupling the physical dodge zone
+            // from the dynamically shrunk hit-rect, and keeping revealed state while hovered.
+            match dodge_state {
+                DodgeState::Idle => {
+                    if in_dodge_zone {
+                        if is_touching_peek_edge {
+                            dodge_state = DodgeState::Revealed;
+                        } else if is_background_app_window_at(cursor.x as i32, cursor.y as i32, my_hwnd) {
+                            dodge_state = DodgeState::Dodged;
+                        }
+                    }
+                }
+                DodgeState::Dodged => {
+                    if is_touching_peek_edge {
+                        // User intentionally pushed cursor to the ceiling / peek rim to pull island down
+                        dodge_state = DodgeState::Revealed;
+                    } else if !in_dodge_zone {
+                        // Cursor left the island zone completely -> un-dodge
+                        dodge_state = DodgeState::Idle;
+                    }
+                    // Otherwise stay in Dodged without toggling!
+                }
+                DodgeState::Revealed => {
+                    if !in_dodge_zone {
+                        // User moved cursor away from the island -> reset back to Idle
+                        dodge_state = DodgeState::Idle;
+                    }
+                    // While in Revealed state and cursor is in the island zone:
+                    // DO NOT DODGE! The user is actively interacting with the island!
+                }
+            }
+
+            let is_currently_dodged = dodge_state == DodgeState::Dodged;
+            if is_currently_dodged != dodged {
+                dodged = is_currently_dodged;
                 let _ = window.emit("island-dodge", dodged);
             }
+
+            let is_hovered = if is_currently_dodged {
+                // When dodged, only touching the 5px peek rim at the ceiling counts as hover
+                is_touching_peek_edge && in_dodge_zone
+            } else {
+                let slop = if hovered { 4.0 } else { 0.0 };
+                config
+                    .island
+                    .map(|rect| contains(&rect, local_x, local_y, slop))
+                    .unwrap_or(false)
+            };
 
             if is_hovered != hovered {
                 hovered = is_hovered;
