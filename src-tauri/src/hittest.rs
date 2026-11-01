@@ -44,7 +44,7 @@ fn contains(rect: &HitRect, x: f64, y: f64, slop: f64) -> bool {
 
 #[cfg(target_os = "windows")]
 fn is_background_app_window_at(screen_x: i32, screen_y: i32, my_hwnd: isize) -> bool {
-    use windows::Win32::Foundation::{HWND, POINT, RECT};
+    use windows::Win32::Foundation::{POINT, RECT};
     use windows::Win32::UI::WindowsAndMessaging::{
         GetAncestor, GetDesktopWindow, GetForegroundWindow, GetShellWindow, GetWindowLongW,
         GetWindowRect, GetWindowTextLengthW, IsWindowVisible, WindowFromPoint, GA_ROOT, GWL_EXSTYLE,
@@ -54,17 +54,17 @@ fn is_background_app_window_at(screen_x: i32, screen_y: i32, my_hwnd: isize) -> 
     unsafe {
         let pt = POINT { x: screen_x, y: screen_y };
         let hit = WindowFromPoint(pt);
-        if hit.0 == 0 {
+        if hit.0.is_null() {
             return false;
         }
         let root = GetAncestor(hit, GA_ROOT);
-        let target = if root.0 != 0 { root } else { hit };
+        let target = if !root.0.is_null() { root } else { hit };
 
-        if target.0 == my_hwnd || target.0 == 0 {
+        if target.0.is_null() || (target.0 as isize) == my_hwnd {
             // The direct window under cursor is our own transparent webview or none;
             // check if the current active foreground window sits under the cursor
             let fg = GetForegroundWindow();
-            if fg.0 != 0 && fg.0 != my_hwnd {
+            if !fg.0.is_null() && (fg.0 as isize) != my_hwnd {
                 let mut r = RECT::default();
                 if GetWindowRect(fg, &mut r).is_ok() {
                     if screen_x >= r.left && screen_x < r.right && screen_y >= r.top && screen_y < r.bottom {
