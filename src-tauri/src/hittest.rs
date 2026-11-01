@@ -42,6 +42,82 @@ fn contains(rect: &HitRect, x: f64, y: f64, slop: f64) -> bool {
         && y < rect.y + rect.height + slop
 }
 
+#[cfg(target_os = "windows")]
+fn is_background_app_window_at(screen_x: i32, screen_y: i32, my_hwnd: isize) -> bool {
+    use windows::Win32::Foundation::{HWND, POINT, RECT};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetAncestor, GetDesktopWindow, GetForegroundWindow, GetShellWindow, GetWindowLongW,
+        GetWindowRect, GetWindowTextLengthW, IsWindowVisible, WindowFromPoint, GA_ROOT, GWL_EXSTYLE,
+        WS_EX_TOOLWINDOW, WS_EX_TRANSPARENT,
+    };
+
+    unsafe {
+        let pt = POINT { x: screen_x, y: screen_y };
+        let hit = WindowFromPoint(pt);
+        if hit.0 == 0 {
+            return false;
+        }
+        let root = GetAncestor(hit, GA_ROOT);
+        let target = if root.0 != 0 { root } else { hit };
+
+        if target.0 == my_hwnd || target.0 == 0 {
+            // The direct window under cursor is our own transparent webview or none;
+            // check if the current active foreground window sits under the cursor
+            let fg = GetForegroundWindow();
+            if fg.0 != 0 && fg.0 != my_hwnd {
+                let mut r = RECT::default();
+                if GetWindowRect(fg, &mut r).is_ok() {
+                    if screen_x >= r.left && screen_x < r.right && screen_y >= r.top && screen_y < r.bottom {
+                        let shell = GetShellWindow();
+                        let desktop = GetDesktopWindow();
+                        if fg != shell && fg != desktop {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        let shell = GetShellWindow();
+        let desktop = GetDesktopWindow();
+        if target == shell || target == desktop {
+            return false;
+        }
+
+        if !IsWindowVisible(target).as_bool() {
+            return false;
+        }
+
+        let ex_style = GetWindowLongW(target, GWL_EXSTYLE) as u32;
+        if (ex_style & WS_EX_TOOLWINDOW.0 != 0) || (ex_style & WS_EX_TRANSPARENT.0 != 0) {
+            return false;
+        }
+
+        // Ignore unnamed or tiny windows
+        let title_len = GetWindowTextLengthW(target);
+        if title_len == 0 {
+            return false;
+        }
+
+        let mut r = RECT::default();
+        if GetWindowRect(target, &mut r).is_ok() {
+            let w = r.right - r.left;
+            let h = r.bottom - r.top;
+            if w > 200 && h > 150 {
+                return true;
+            }
+        }
+
+        false
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn is_background_app_window_at(_screen_x: i32, _screen_y: i32, _my_hwnd: isize) -> bool {
+    false
+}
+
 #[tauri::command]
 pub fn set_hit_test_config(
     state: tauri::State<'_, HitTestState>,
@@ -74,10 +150,12 @@ pub fn start_hit_test_loop(app: AppHandle) {
 
     std::thread::spawn(move || {
         let mut hovered = false;
+        let mut dodged = false;
         let mut ignored = false;
         let mut last_cursor_x = -9999.0;
         let mut last_cursor_y = -9999.0;
         let mut last_emit_time = std::time::Instant::now();
+        let my_hwnd = window.hwnd().map(|h| h.0 as isize).unwrap_or(0);
         loop {
             std::thread::sleep(Duration::from_millis(16));
 
@@ -135,11 +213,31 @@ pub fn start_hit_test_loop(app: AppHandle) {
                 .map(|rect| contains(&rect, local_x, local_y, slop))
                 .unwrap_or(false);
 
+            // Intelligent Dodge detection:
+            // When the mouse is over the island area, check if there is an active application
+            // window (e.g. Chrome, Edge browser with top tabs) directly behind the island.
+            // If so, emit `island-dodge` = true unless the cursor is pushed right up to the very
+            // top edge (local_y <= 5.0) where the user touches the peek rim to intentionally reveal it.
+            let is_touching_peek_edge = local_y <= 5.0;
+            let should_dodge = if is_hovered {
+                if is_touching_peek_edge {
+                    false
+                } else {
+                    is_background_app_window_at(cursor.x as i32, cursor.y as i32, my_hwnd)
+                }
+            } else {
+                false
+            };
+
+            if should_dodge != dodged {
+                dodged = should_dodge;
+                let _ = window.emit("island-dodge", dodged);
+            }
+
             if is_hovered != hovered {
                 hovered = is_hovered;
                 let _ = window.emit("island-hover", hovered);
             }
-
             // Whenever the island is hovered, it is guaranteed interactive so
             // click-through toggles never fight hover detection at borders.
             let is_interactive = config.force

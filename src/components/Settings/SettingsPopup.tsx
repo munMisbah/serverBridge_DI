@@ -338,6 +338,14 @@ export const SettingsPopup: React.FC = () => {
                   onChange={() => updateSettings({ alwaysOnTopEnabled: !settings.alwaysOnTopEnabled })}
                   activeClass="bg-sky-500"
                 />
+                <ToggleRow
+                  icon={<EyeClosedIcon size={16} className="text-indigo-400" />}
+                  title="Intelligent Dodge (Auto-Peek)"
+                  description="Sembunyikan kapsul ke atas saat kursor melintasi tab browser atau jendela di belakangnya"
+                  checked={settings.intelligentDodgeEnabled ?? true}
+                  onChange={() => updateSettings({ intelligentDodgeEnabled: !(settings.intelligentDodgeEnabled ?? true) })}
+                  activeClass="bg-indigo-500"
+                />
 
                 <ToggleRow
                   icon={<PowerIcon size={16} className="text-emerald-400" />}

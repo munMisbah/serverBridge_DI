@@ -3,6 +3,7 @@ import React, {
   useEffect,
   useLayoutEffect,
   useRef,
+  useState,
 } from 'react';
 import { motion, AnimatePresence, Transition } from 'framer-motion';
 import { useIsland } from '../../context/IslandContext';
@@ -27,13 +28,21 @@ export const IslandRoot: React.FC = () => {
   const stateRef = useRef(state);
   const triggerRef = useRef(settings.expandTrigger);
   const isHoveredRef = useRef(false);
-
+  const [isDodged, setIsDodged] = useState(false);
+  const isDodgedRef = useRef(false);
+  isDodgedRef.current = isDodged;
   const isTauri =
     typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
   const isPlaying = audioPlayback?.isPlaying ?? false;
   const islandStyle = settings.islandStyle || 'pill';
+  const intelligentDodgeEnabled = settings.intelligentDodgeEnabled ?? true;
   const dimensions = getIslandDimensions(islandStyle, state, isPlaying, activeTab);
+
+  // When dodged, tuck the island up into the top screen edge, leaving only a subtle ~5px peek rim
+  const PEEK_RIM_VISIBLE = 5;
+  const dodgedY = -dimensions.height + PEEK_RIM_VISIBLE;
+  const effectiveY = isDodged && intelligentDodgeEnabled ? dodgedY : dimensions.top;
 
   useLayoutEffect(() => {
     stateRef.current = state;
@@ -123,6 +132,45 @@ export const IslandRoot: React.FC = () => {
     };
   }, [handleHoverChange, isTauri]);
 
+  // In Tauri, listen for intelligent dodge events emitted from the native Win32 hit-test loop
+  useEffect(() => {
+    if (!isTauri) return;
+
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+
+    import('@tauri-apps/api/event')
+      .then(({ listen }) =>
+        listen<boolean>('island-dodge', (event) => {
+          setIsDodged(event.payload);
+        })
+      )
+      .then((fn) => {
+        if (cancelled) {
+          fn();
+        } else {
+          unlisten = fn;
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [isTauri]);
+
+  // Expose global preview trigger on window for simulator testing
+  useEffect(() => {
+    interface WindowWithDodge {
+      __toggleDodgePreview?: (force?: boolean) => void;
+    }
+    const win = window as unknown as WindowWithDodge;
+    win.__toggleDodgePreview = (force?: boolean) => {
+      setIsDodged((prev: boolean) => (force !== undefined ? force : !prev));
+    };
+  }, []);
+
   // Keep the native click-through hit rect in sync with the island size.
   // Floating notes register their own rects through the hit-test bridge.
   useEffect(() => {
@@ -130,19 +178,24 @@ export const IslandRoot: React.FC = () => {
 
     const updateIslandRect = () => {
       const vw = window.innerWidth || 700;
+      const width = dimensions.width;
+      const isCurrentlyDodged = isDodged && intelligentDodgeEnabled;
+      // When dodged, shrink the native hit-rect to just the peek rim at the screen ceiling.
+      // This immediately allows click-through to background browser tabs!
+      const height = isCurrentlyDodged ? PEEK_RIM_VISIBLE + 2 : dimensions.height + dimensions.top;
 
       setIslandHitRect({
-        x: Math.max(0, (vw - dimensions.width) / 2),
+        x: Math.max(0, (vw - width) / 2),
         y: 0,
-        width: dimensions.width,
-        height: dimensions.height + dimensions.top,
+        width,
+        height,
       });
     };
 
     updateIslandRect();
     window.addEventListener('resize', updateIslandRect);
     return () => window.removeEventListener('resize', updateIslandRect);
-  }, [dimensions.height, dimensions.width, dimensions.top, isTauri, state, activeTab]);
+  }, [dimensions.height, dimensions.width, dimensions.top, isTauri, state, activeTab, isDodged, intelligentDodgeEnabled]);
 
   // Collapse when clicking outside (browser) or when the Tauri window loses focus.
   useEffect(() => {
@@ -195,9 +248,9 @@ export const IslandRoot: React.FC = () => {
     ? { duration: 0.15, ease: 'easeOut' }
     : {
         type: 'spring',
-        stiffness: 480,
-        damping: 38,
-        mass: 0.7,
+        stiffness: isDodged ? 520 : 440,
+        damping: isDodged ? 36 : 34,
+        mass: 0.65,
       };
 
   const opacity = (settings.backgroundOpacity ?? 85) / 100;
@@ -243,7 +296,7 @@ export const IslandRoot: React.FC = () => {
             willChange: 'width, height, transform',
           }}
           animate={{
-            y: dimensions.top,
+            y: effectiveY,
             width: dimensions.width,
             height: dimensions.height,
           }}

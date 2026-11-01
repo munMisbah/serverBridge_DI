@@ -91,6 +91,7 @@ export interface UserSettings {
   autostartEnabled: boolean;
   alwaysOnTopEnabled: boolean;
   expandTrigger: ExpandTrigger;
+  intelligentDodgeEnabled?: boolean;
   targetMonitor: string;
   weatherLocation: {
     name: string;

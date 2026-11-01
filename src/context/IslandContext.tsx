@@ -63,6 +63,7 @@ const DEFAULT_SETTINGS: UserSettings = {
   autostartEnabled: true,
   alwaysOnTopEnabled: true,
   expandTrigger: 'hover',
+  intelligentDodgeEnabled: true,
   targetMonitor: 'primary',
   weatherLocation: DEFAULT_WEATHER_LOCATION,
   weatherRefreshInterval: 30, // 30 min
