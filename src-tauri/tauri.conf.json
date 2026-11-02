@@ -25,23 +25,6 @@
         "focus": false,
         "skipTaskbar": true,
         "shadow": false
-      },
-      {
-        "title": "Pengaturan Dynamic Island",
-        "label": "settings",
-        "url": "index.html#settings",
-        "width": 520,
-        "height": 620,
-        "resizable": false,
-        "fullscreen": false,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
-        "visible": false,
-        "focus": false,
-        "skipTaskbar": true,
-        "shadow": false,
-        "center": true
       }
     ],
     "security": {

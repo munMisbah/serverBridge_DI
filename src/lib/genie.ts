@@ -149,8 +149,15 @@ const frame = (now: number) => {
   }
 
   frameId = 0;
-  // Keep canvas mounted, simply leave cleared transparent surface
-  c.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+  // Nothing left to draw: drop the full-viewport surface entirely. A mounted
+  // screen-sized canvas keeps a GPU layer (~32 MB at 1920x1040 @2x) alive even
+  // when transparent, so it is recreated on demand by `ensureCanvas`.
+  if (canvas) {
+    canvas.remove();
+    canvas = null;
+  }
+  ctx = null;
 };
 
 /** Play one genie warp. Resolves when the animation finishes. */

@@ -360,8 +360,6 @@ export const IslandRoot: React.FC = () => {
               border: glassBorder,
               borderTop: glassBorderTop,
               boxShadow: glassShadow,
-              backdropFilter: blur > 0 ? `blur(${blur}px) saturate(180%)` : undefined,
-              WebkitBackdropFilter: blur > 0 ? `blur(${blur}px) saturate(180%)` : undefined,
               willChange: 'border-radius',
             }}
             animate={{
@@ -372,8 +370,9 @@ export const IslandRoot: React.FC = () => {
             {/* Frosted Glass Micro-Grain Texture (Tactile Diffusion) */}
             {isGlass && blur > 0 && (
               <div
-                className="pointer-events-none absolute inset-0 z-0 opacity-[0.045] mix-blend-overlay"
+                className="pointer-events-none absolute inset-0 z-0 mix-blend-overlay"
                 style={{
+                  opacity: Math.min(0.07, 0.012 + blur * 0.0016),
                   backgroundImage: `url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)'/%3E%3C/svg%3E")`,
                 }}
               />

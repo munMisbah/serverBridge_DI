@@ -58,9 +58,6 @@ pub fn run() {
             } else {
                 log_step("ERROR: Main window 'main' not found in app setup!");
             }
-            if let Some(settings_window) = app.get_webview_window("settings") {
-                let _ = settings_window.set_skip_taskbar(true);
-            }
 
             // 2. Setup System Tray Menu with rich settings dropdown
             let mut tray_holder: Option<tauri::tray::TrayIcon> = None;
@@ -196,12 +193,8 @@ pub fn run() {
                                 }
                             }
                             "open_settings" => {
-                                if let Some(win) = app.get_webview_window("settings") {
-                                    let _ = win.show();
-                                    let _ = win.unminimize();
-                                    let _ = win.set_focus();
-                                } else if let Some(main_win) = app.get_webview_window("main") {
-                                    let _ = main_win.emit("tray-open-settings", ());
+                                if let Err(e) = settings::ensure_settings_window(app) {
+                                    log_step(&format!("Warning: Could not open settings: {}", e));
                                 }
                             }
                             "mode_hover" => {
