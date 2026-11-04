@@ -1,9 +1,21 @@
 use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
-static SUPPRESS_NEXT_EVENT: AtomicBool = AtomicBool::new(false);
+/// Epoch-ms deadline; clipboard changes before it are our own writes.
+///
+/// A time window (not a one-shot flag) mirrors the old 350 ms polling: a single
+/// write fires `EmptyClipboard` + `SetClipboardData`, i.e. two notifications.
+/// Swallowing only the first one produced duplicate history entries.
+static SUPPRESS_UNTIL_MS: AtomicU64 = AtomicU64::new(0);
+
+fn epoch_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClipboardPayload {
@@ -207,7 +219,8 @@ pub fn start_clipboard_listener(app: AppHandle) {
                 if seq != last_seq && seq != 0 {
                     last_seq = seq;
 
-                    if SUPPRESS_NEXT_EVENT.swap(false, Ordering::SeqCst) {
+                    // Ignore the whole burst caused by our own write.
+                    if epoch_ms() < SUPPRESS_UNTIL_MS.load(Ordering::SeqCst) {
                         continue;
                     }
 
@@ -400,7 +413,7 @@ pub fn clipboard_write_text(text: String) -> Result<(), String> {
         };
         use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
 
-        SUPPRESS_NEXT_EVENT.store(true, Ordering::SeqCst);
+        SUPPRESS_UNTIL_MS.store(epoch_ms() + 400, Ordering::SeqCst);
 
         let wide: Vec<u16> = text.encode_utf16().chain(std::iter::once(0)).collect();
         let bytes_len = wide.len() * std::mem::size_of::<u16>();
@@ -444,7 +457,7 @@ pub fn clipboard_write_image(image_path: String) -> Result<(), String> {
         };
         use windows::Win32::System::Memory::{GlobalAlloc, GlobalLock, GlobalUnlock, GMEM_MOVEABLE};
 
-        SUPPRESS_NEXT_EVENT.store(true, Ordering::SeqCst);
+        SUPPRESS_UNTIL_MS.store(epoch_ms() + 400, Ordering::SeqCst);
 
         let path = std::path::Path::new(&image_path);
         if !path.exists() {
