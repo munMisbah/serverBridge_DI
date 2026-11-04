@@ -2,6 +2,15 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tauri::{AppHandle, Emitter, Manager};
 
+#[cfg(target_os = "windows")]
+use windows::Win32::Foundation::{HWND, POINT};
+#[cfg(target_os = "windows")]
+use windows::Win32::Graphics::Gdi::ClientToScreen;
+#[cfg(target_os = "windows")]
+use windows::Win32::UI::HiDpi::GetDpiForWindow;
+#[cfg(target_os = "windows")]
+use windows::Win32::UI::WindowsAndMessaging::GetCursorPos;
+
 #[derive(Debug, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub struct HitRect {
     pub x: f64,
@@ -32,7 +41,7 @@ pub struct HitTestConfig {
 /// cursor events or pass them through to the desktop.
 #[derive(Clone, Default)]
 pub struct HitTestState {
-    pub config: Arc<Mutex<Option<HitTestConfig>>>,
+    pub config: Arc<Mutex<Option<Arc<HitTestConfig>>>>,
 }
 
 fn contains(rect: &HitRect, x: f64, y: f64, slop: f64) -> bool {
@@ -40,6 +49,37 @@ fn contains(rect: &HitRect, x: f64, y: f64, slop: f64) -> bool {
         && x < rect.x + rect.width + slop
         && y >= rect.y - slop
         && y < rect.y + rect.height + slop
+}
+
+/// Read the OS cursor and convert it to client-area CSS pixels.
+///
+/// Returns `(screen_x, screen_y, local_x, local_y)`: screen coordinates stay in
+/// physical pixels, local ones are divided by the window DPI scale so they line
+/// up with `HitRect`s reported by the webview.
+///
+/// This deliberately avoids `window.cursor_position()` / `inner_position()` /
+/// `scale_factor()`: each of those round-trips through the event loop, and the
+/// hit-test loop runs 62 times per second.
+#[cfg(target_os = "windows")]
+fn native_cursor(hwnd_raw: isize) -> Option<(f64, f64, f64, f64)> {
+    let hwnd = HWND(hwnd_raw as *mut core::ffi::c_void);
+    let mut point = POINT::default();
+    unsafe { GetCursorPos(&mut point) }.ok()?;
+
+    let mut origin = POINT::default();
+    if !unsafe { ClientToScreen(hwnd, &mut origin) }.as_bool() {
+        return None;
+    }
+
+    let dpi = unsafe { GetDpiForWindow(hwnd) }.max(96);
+    let scale = dpi as f64 / 96.0;
+
+    Some((
+        point.x as f64,
+        point.y as f64,
+        (point.x - origin.x) as f64 / scale,
+        (point.y - origin.y) as f64 / scale,
+    ))
 }
 
 #[cfg(target_os = "windows")]
@@ -126,11 +166,11 @@ pub fn set_hit_test_config(
     force: bool,
 ) {
     if let Ok(mut config) = state.config.lock() {
-        *config = Some(HitTestConfig {
+        *config = Some(Arc::new(HitTestConfig {
             island,
             interactive,
             force,
-        });
+        }));
     }
 }
 
@@ -165,29 +205,41 @@ pub fn start_hit_test_loop(app: AppHandle) {
         let mut last_cursor_y = -9999.0;
         let mut last_emit_time = std::time::Instant::now();
         let my_hwnd = window.hwnd().map(|h| h.0 as isize).unwrap_or(0);
+        #[cfg(target_os = "windows")]
+        let hwnd = window.hwnd().ok().map(|h| h.0 as isize);
         loop {
             std::thread::sleep(Duration::from_millis(16));
 
-            let Ok(cursor) = window.cursor_position() else {
-                continue;
-            };
-            let Ok(origin) = window.inner_position() else {
-                continue;
-            };
-            let scale = window.scale_factor().unwrap_or(1.0);
+            #[cfg(target_os = "windows")]
+            let cursor_sample = hwnd.and_then(native_cursor);
+            #[cfg(not(target_os = "windows"))]
+            let cursor_sample = window
+                .cursor_position()
+                .ok()
+                .zip(window.inner_position().ok())
+                .map(|(c, o)| {
+                    let scale = window.scale_factor().unwrap_or(1.0);
+                    (
+                        c.x,
+                        c.y,
+                        (c.x - o.x as f64) / scale,
+                        (c.y - o.y as f64) / scale,
+                    )
+                });
 
-            let local_x = (cursor.x - origin.x as f64) / scale;
-            let local_y = (cursor.y - origin.y as f64) / scale;
+            let Some((cursor_x, cursor_y, local_x, local_y)) = cursor_sample else {
+                continue;
+            };
 
             // Global Windows cursor tracking for robotic eyes:
             // Throttled to 50ms (~20Hz) and significant delta to prevent IPC flooding & RAM churn
             let now = std::time::Instant::now();
             if now.duration_since(last_emit_time) >= Duration::from_millis(50) {
-                let dx = (cursor.x - last_cursor_x).abs();
-                let dy = (cursor.y - last_cursor_y).abs();
+                let dx = (cursor_x - last_cursor_x).abs();
+                let dy = (cursor_y - last_cursor_y).abs();
                 if dx >= 3.0 || dy >= 3.0 {
-                    last_cursor_x = cursor.x;
-                    last_cursor_y = cursor.y;
+                    last_cursor_x = cursor_x;
+                    last_cursor_y = cursor_y;
                     last_emit_time = now;
                     let _ = window.emit(
                         "windows-cursor-move",
@@ -240,7 +292,7 @@ pub fn start_hit_test_loop(app: AppHandle) {
                     if in_dodge_zone {
                         if is_touching_peek_edge {
                             dodge_state = DodgeState::Revealed;
-                        } else if is_background_app_window_at(cursor.x as i32, cursor.y as i32, my_hwnd) {
+                        } else if is_background_app_window_at(cursor_x as i32, cursor_y as i32, my_hwnd) {
                             dodge_state = DodgeState::Dodged;
                         }
                     }

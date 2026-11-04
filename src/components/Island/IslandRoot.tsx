@@ -294,9 +294,6 @@ export const IslandRoot: React.FC = () => {
           ref={islandRef}
           data-island
           className="pointer-events-auto relative select-none text-white"
-          style={{
-            willChange: 'width, height, transform',
-          }}
           animate={{
             y: effectiveY,
             width: dimensions.width,
@@ -360,7 +357,6 @@ export const IslandRoot: React.FC = () => {
               border: glassBorder,
               borderTop: glassBorderTop,
               boxShadow: glassShadow,
-              willChange: 'border-radius',
             }}
             animate={{
               borderRadius: dimensions.borderRadius,
