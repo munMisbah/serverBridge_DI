@@ -93,6 +93,86 @@ fn rgba_to_dib(img: &image::RgbaImage) -> Vec<u8> {
     dib
 }
 
+/// Event-driven clipboard notifications.
+///
+/// A message-only window subscribes to `WM_CLIPBOARDUPDATE`; the listener thread
+/// then blocks in `GetMessageW` instead of waking up every 350 ms. Idle cost drops
+/// to a single blocked thread with no timer and no kernel polling.
+#[cfg(target_os = "windows")]
+mod clip_events {
+    use windows::core::w;
+    use windows::Win32::Foundation::{HINSTANCE, HWND, LPARAM, LRESULT, WPARAM};
+    use windows::Win32::System::DataExchange::AddClipboardFormatListener;
+    use windows::Win32::System::LibraryLoader::GetModuleHandleW;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        CreateWindowExW, DefWindowProcW, DispatchMessageW, GetMessageW, RegisterClassW,
+        TranslateMessage, HWND_MESSAGE, MSG, WINDOW_EX_STYLE, WINDOW_STYLE, WM_CLIPBOARDUPDATE,
+        WNDCLASSW,
+    };
+
+    unsafe extern "system" fn wnd_proc(
+        hwnd: HWND,
+        msg: u32,
+        wparam: WPARAM,
+        lparam: LPARAM,
+    ) -> LRESULT {
+        unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
+    }
+
+    /// Create the message-only window. Must be called on the thread that will
+    /// pump messages, since a Win32 window is bound to its creating thread.
+    pub fn create_watcher() -> Option<HWND> {
+        unsafe {
+            let instance = GetModuleHandleW(None).ok()?;
+            let class = WNDCLASSW {
+                lpfnWndProc: Some(wnd_proc),
+                hInstance: HINSTANCE(instance.0),
+                lpszClassName: w!("DynamicIslandClipboardWatcher"),
+                ..Default::default()
+            };
+            let _ = RegisterClassW(&class);
+
+            let hwnd = CreateWindowExW(
+                WINDOW_EX_STYLE::default(),
+                w!("DynamicIslandClipboardWatcher"),
+                w!(""),
+                WINDOW_STYLE::default(),
+                0,
+                0,
+                0,
+                0,
+                HWND_MESSAGE,
+                None,
+                HINSTANCE(instance.0),
+                None,
+            )
+            .ok()?;
+
+            AddClipboardFormatListener(hwnd).ok()?;
+            Some(hwnd)
+        }
+    }
+
+    /// Block until the OS posts `WM_CLIPBOARDUPDATE`. `false` means the watcher
+    /// could not be created or the message loop ended.
+    pub fn wait_for_update(hwnd: HWND) -> bool {
+        let mut msg = MSG::default();
+        loop {
+            // 0 = WM_QUIT, -1 = error; both end the loop.
+            if unsafe { GetMessageW(&mut msg, HWND::default(), 0, 0) }.0 <= 0 {
+                return false;
+            }
+            unsafe {
+                let _ = TranslateMessage(&msg);
+                DispatchMessageW(&msg);
+            }
+            if msg.hwnd == hwnd && msg.message == WM_CLIPBOARDUPDATE {
+                return true;
+            }
+        }
+    }
+}
+
 pub fn start_clipboard_listener(app: AppHandle) {
     #[cfg(target_os = "windows")]
     {
@@ -111,8 +191,17 @@ pub fn start_clipboard_listener(app: AppHandle) {
 
             let format_png = unsafe { RegisterClipboardFormatW(windows::core::w!("PNG")) };
 
+            // A Win32 window belongs to the thread that created it, so the
+            // message-only watcher lives on this listener thread.
+            let Some(watcher) = clip_events::create_watcher() else {
+                return;
+            };
+
             loop {
-                std::thread::sleep(Duration::from_millis(350));
+                // Blocks until the OS posts WM_CLIPBOARDUPDATE: no timer, no polling.
+                if !clip_events::wait_for_update(watcher) {
+                    return;
+                }
 
                 let seq = unsafe { GetClipboardSequenceNumber() };
                 if seq != last_seq && seq != 0 {
