@@ -14,6 +14,9 @@ import {
   TodoItem,
   NoteItem,
   BatterySnapshot,
+  ServerConfig,
+  ServerUpsertInput,
+  ServerUpsertResult,
 } from '../types';
 
 interface IslandContextType {
@@ -32,6 +35,14 @@ interface IslandContextType {
   batteryLoading: boolean;
   batteryError: string | null;
   refreshBattery: () => Promise<void>;
+  servers: ServerConfig[];
+  serversLoading: boolean;
+  refreshServers: () => Promise<void>;
+  upsertServer: (input: ServerUpsertInput) => Promise<ServerUpsertResult>;
+  deleteServer: (id: string) => Promise<void>;
+  serverSecrets: Record<string, string>;
+  setServerSecret: (id: string, secret: string) => void;
+  clearServerSecret: (id: string) => void;
   events: CalendarEvent[];
   addEvent: (event: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateEvent: (id: string, event: Partial<CalendarEvent>) => void;
@@ -196,6 +207,22 @@ const DEFAULT_BATTERY: BatterySnapshot = {
   updatedAt: Date.now(),
 };
 
+// Browser preview only: native Tauri builds start with an empty server list.
+const DEFAULT_SERVERS: ServerConfig[] = [
+  {
+    id: 'demo-server',
+    name: 'Hetzner · web-01',
+    host: '203.0.113.10',
+    port: 22,
+    username: 'deploy',
+    authType: 'key',
+    keyPath: '~/.ssh/id_ed25519',
+    rememberCredential: false,
+    createdAt: Date.now(),
+    updatedAt: Date.now(),
+  },
+];
+
 const SAMPLE_SCREENSHOT_THUMBNAIL = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%231e293b"/><stop offset="100%" stop-color="%230f172a"/></linearGradient></defs><rect width="320" height="180" rx="12" fill="url(%23g)"/><rect x="20" y="24" width="280" height="28" rx="6" fill="%23334155"/><rect x="20" y="62" width="130" height="94" rx="8" fill="%230284c7" opacity="0.4"/><rect x="160" y="62" width="140" height="94" rx="8" fill="%236366f1" opacity="0.4"/><circle cx="36" cy="38" r="4" fill="%23ef4444"/><circle cx="48" cy="38" r="4" fill="%23eab308"/><circle cx="60" cy="38" r="4" fill="%2322c55e"/><text x="160" y="112" font-family="sans-serif" font-size="12" fill="%2394a3b8" text-anchor="middle">Screenshot Preview (1920 × 1080)</text></svg>';
 
 const INITIAL_CLIPBOARD_ITEMS: ClipboardItem[] = [
@@ -300,6 +327,24 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   );
   const [batteryLoading, setBatteryLoading] = useState(false);
   const [batteryError, setBatteryError] = useState<string | null>(null);
+  const isTauriRuntime =
+    typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
+  const [servers, setServers] = useState<ServerConfig[]>(() => {
+    if (isTauriRuntime) return [];
+    try {
+      const saved = localStorage.getItem('di_servers');
+      if (saved) return JSON.parse(saved);
+    } catch (err) {
+      console.error('Failed to load servers:', err);
+    }
+    return DEFAULT_SERVERS;
+  });
+  const [serversLoading, setServersLoading] = useState(isTauriRuntime);
+  const serversRef = useRef(servers);
+  serversRef.current = servers;
+  // Session-only secrets. Never persisted; remembered credentials live in
+  // Windows Credential Manager and are read directly by the Rust backend.
+  const [serverSecrets, setServerSecrets] = useState<Record<string, string>>({});
   const dismissTimerRef = useRef<number | undefined>(undefined);
   const settingsRef = useRef(settings);
   useEffect(() => {
@@ -379,6 +424,17 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       console.error('Failed to persist todos:', err);
     }
   }, [todos]);
+
+  // The Tauri backend owns server configs. Only the web preview keeps a
+  // local mirror so the UI can be exercised without the native shell.
+  useEffect(() => {
+    if (isTauriRuntime) return;
+    try {
+      localStorage.setItem('di_servers', JSON.stringify(servers));
+    } catch (err) {
+      console.error('Failed to persist servers:', err);
+    }
+  }, [servers, isTauriRuntime]);
 
   // Save notes to local storage (debounced: typing must not write per keystroke)
   const notesPersistTimer = useRef<number | undefined>(undefined);
@@ -896,6 +952,95 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     } catch {}
   }, []);
 
+  const refreshServers = useCallback(async () => {
+    if (!isTauriRuntime) {
+      setServersLoading(false);
+      return;
+    }
+    setServersLoading(true);
+    try {
+      const list = await invoke<ServerConfig[]>('servers_list');
+      setServers(list);
+    } catch (err) {
+      console.error('Failed to load servers:', err);
+    } finally {
+      setServersLoading(false);
+    }
+  }, [isTauriRuntime]);
+
+  useEffect(() => {
+    void refreshServers();
+  }, [refreshServers]);
+
+  const upsertServer = useCallback(
+    async (input: ServerUpsertInput): Promise<ServerUpsertResult> => {
+      if (isTauriRuntime) {
+        const result = await invoke<ServerUpsertResult>('server_upsert', { input });
+        setServers((prev) => {
+          const index = prev.findIndex((server) => server.id === result.server.id);
+          if (index === -1) return [...prev, result.server];
+          const next = [...prev];
+          next[index] = result.server;
+          return next;
+        });
+        return result;
+      }
+
+      const now = Date.now();
+      const id = input.id ?? `srv-${now}-${Math.random().toString(36).slice(2, 6)}`;
+      const existing = serversRef.current.find((server) => server.id === id);
+      const server: ServerConfig = {
+        id,
+        name: input.name,
+        host: input.host,
+        port: input.port,
+        username: input.username,
+        authType: input.authType,
+        keyPath: input.keyPath,
+        rememberCredential: input.rememberCredential,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      };
+      setServers((prev) =>
+        existing
+          ? prev.map((item) => (item.id === id ? server : item))
+          : [...prev, server]
+      );
+      return { server, credentialCleared: false };
+    },
+    [isTauriRuntime]
+  );
+
+  const deleteServer = useCallback(
+    async (id: string) => {
+      if (isTauriRuntime) {
+        await invoke('server_delete', { serverId: id });
+      }
+      setServers((prev) => prev.filter((server) => server.id !== id));
+      setServerSecrets((prev) => {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      });
+    },
+    [isTauriRuntime]
+  );
+
+  const setServerSecret = useCallback((id: string, secret: string) => {
+    setServerSecrets((prev) => {
+      if (!secret) {
+        const next = { ...prev };
+        delete next[id];
+        return next;
+      }
+      return { ...prev, [id]: secret };
+    });
+  }, []);
+
+  const clearServerSecret = useCallback((id: string) => {
+    setServerSecret(id, '');
+  }, [setServerSecret]);
+
   const addTodo = useCallback((title: string) => {
     const trimmed = title.trim();
     if (!trimmed) return;
@@ -1002,6 +1147,14 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         batteryLoading,
         batteryError,
         refreshBattery,
+        servers,
+        serversLoading,
+        refreshServers,
+        upsertServer,
+        deleteServer,
+        serverSecrets,
+        setServerSecret,
+        clearServerSecret,
         events,
         addEvent,
         updateEvent,

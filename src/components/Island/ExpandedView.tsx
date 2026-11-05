@@ -7,6 +7,7 @@ import { BellIcon } from '@solar-icons/react/bold/bell';
 import { ClipboardListIcon } from '@solar-icons/react/bold/clipboard-list';
 import { ChecklistIcon } from '@solar-icons/react/bold/checklist';
 import { BatteryFullIcon } from '@solar-icons/react/bold/battery-full';
+import { ServerSquareIcon } from '@solar-icons/react/bold/server-square';
 import { TodoTab } from '../Dashboard/TodoTab';
 import { useIsland } from '../../context/IslandContext';
 import { OverviewTab } from '../Dashboard/OverviewTab';
@@ -15,6 +16,7 @@ import { CalendarTab } from '../Dashboard/CalendarTab';
 import { NotificationsTab } from '../Dashboard/NotificationsTab';
 import { ClipboardTab } from '../Dashboard/ClipboardTab';
 import { BatteryTab } from '../Dashboard/BatteryTab';
+import { ServersTab } from '../Dashboard/ServersTab';
 import { ActiveTab } from '../../types';
 interface TabItem {
   id: ActiveTab;
@@ -31,6 +33,7 @@ const TAB_ORDER: ActiveTab[] = [
   'notifications',
   'clipboard',
   'battery',
+  'servers',
 ];
 
 export const ExpandedView: React.FC = () => {
@@ -59,6 +62,7 @@ export const ExpandedView: React.FC = () => {
     { id: 'notifications', label: 'Alerts', icon: BellIcon, badge: unreadCount > 0 },
     { id: 'clipboard', label: 'Clipboard', icon: ClipboardListIcon },
     { id: 'battery', label: 'Battery', icon: BatteryFullIcon },
+    { id: 'servers', label: 'Servers', icon: ServerSquareIcon },
   ];
 
   const handleSelectTab = (tabId: (typeof TAB_ORDER)[number]) => {
@@ -164,6 +168,7 @@ export const ExpandedView: React.FC = () => {
               </div>
             )}
             {activeTab === 'battery' && <BatteryTab />}
+            {activeTab === 'servers' && <ServersTab />}
           </motion.div>
         </AnimatePresence>
       </div>

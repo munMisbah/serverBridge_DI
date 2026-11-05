@@ -489,6 +489,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "compcol"
+version = "0.7.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7a9657f9d47c2bc36be681f158d208f40bafdd1c8c32003dac8e7dfe0cb68a97"
+
+[[package]]
 name = "concurrent-queue"
 version = "2.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -731,6 +737,7 @@ version = "0.1.0"
 dependencies = [
  "base64 0.22.1",
  "image",
+ "puressh",
  "serde",
  "serde_json",
  "tauri",
@@ -738,6 +745,7 @@ dependencies = [
  "tauri-plugin-opener",
  "tokio",
  "windows 0.58.0",
+ "zeroize",
 ]
 
 [[package]]
@@ -2681,6 +2689,25 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "purecrypto"
+version = "0.10.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3195d112344906f1ef5f634a7e1840d864044f9674ed62fdfd720ff2bbfc8bcb"
+dependencies = [
+ "compcol",
+]
+
+[[package]]
+name = "puressh"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "df0c0075aacde432124e24e5dd0d58de330892499fef7769750f159fb7b14971"
+dependencies = [
+ "libc",
+ "purecrypto",
 ]
 
 [[package]]
@@ -4910,6 +4937,12 @@ dependencies = [
  "syn 3.0.9",
  "synstructure",
 ]
+
+[[package]]
+name = "zeroize"
+version = "1.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e13084392c5e4bc371903e2935a5eaeed24905a7511356b883835e18a78f6879"
 
 [[package]]
 name = "zerotrie"

@@ -30,6 +30,7 @@ Anda tinggal menyalin/mengunduh file ini ke laptop/PC Windows 11 Anda, lalu doub
 - **Kalender & Agenda Lokal:** Tampilan tanggal hari ini, daftar agenda kronologis, countdown waktu tersisa, form pembuatan agenda baru (Judul, Jam, Lokasi), tombol hapus, dan penyimpanan persisten.
 - **Windows Notification Bridge:** Menggunakan WinRT `UserNotificationListener` untuk mendengarkan notifikasi Windows 10/11 dan WhatsApp Desktop secara native. Dilengkapi filter blocklist dan privacy toggle (menyembunyikan isi pesan).
 - **Battery Monitor:** Indikator persentase baterai laptop (dengan status charging/plugged in) dan daftar perangkat Bluetooth yang melaporkan level baterai ke Windows — TWS, headphone, keyboard, mouse, speaker, dan lainnya. Tampil sebagai tab Battery bergaya Todo (ring progres + daftar perangkat) dan bisa dipasang pada slot dinamis kapsul.
+- **Server Monitoring (SSH):** Pantau CPU, RAM, storage, dan container Docker dari server Linux tanpa agent. Mendukung autentikasi password maupun SSH key. Konfigurasi server dan `known_hosts` disimpan di backend (bukan localStorage), host key baru wajib dikonfirmasi lewat fingerprint, dan secret opsional disimpan di Windows Credential Manager yang terikat ke `host:port:username`. Polling 30 detik hanya saat tab Servers terbuka; metrik tidak disimpan ke disk.
 - **Media Controls Widget:** Kontrol pemutar audio cepat (Play/Pause, track info) yang tampil di Overview saat media sedang diputar.
 - **Pengaturan Lengkap:** Mode interaksi **Hover / Click** untuk expand-collapse, konfigurasi Autostart, Always on Top, durasi auto-collapse notifikasi, interval refresh cuaca, dan Reduced Motion.
 
@@ -43,7 +44,7 @@ Anda tinggal menyalin/mengunduh file ini ke laptop/PC Windows 11 Anda, lalu doub
 | **Frontend UI** | React 19, TypeScript |
 | **Styling** | Tailwind CSS v4 |
 | **Animation Engine** | Framer Motion (Spring Physics) |
-| **Native Backend** | Rust 2021, `windows-rs` (Win32 & WinRT APIs) |
+| **Native Backend** | Rust 2021, `windows-rs` (Win32 & WinRT APIs), `puressh` (pure-Rust SSH) |
 | **Weather API** | Open-Meteo REST API |
 | **Icons** | Lucide React |
 
@@ -139,6 +140,7 @@ DI-win/
 │   │       ├── CalendarTab.tsx    # Tab agenda & pembuatan jadwal
 │   │       ├── NotificationsTab.tsx # Tab history notifikasi & izin Windows
 │   │       ├── BatteryTab.tsx     # Tab baterai laptop & perangkat Bluetooth
+│   │       ├── ServersTab.tsx     # Tab monitoring CPU/RAM/storage/Docker via SSH
 │   │       └── SettingsTab.tsx    # Tab pengaturan interaksi, autostart & privasi
 └── src-tauri/
     ├── Cargo.toml                 # Dependensi Rust & Windows WinRT crates
@@ -152,10 +154,21 @@ DI-win/
         ├── hittest.rs             # Native click-through hover/hit-test loop
         ├── notifications.rs       # WinRT UserNotificationListener bridge
         ├── battery.rs             # Snapshot baterai sistem & perangkat Bluetooth
+        ├── servers.rs             # Probe SSH: CPU, RAM, storage, Docker
+        ├── credentials.rs         # Windows Credential Manager untuk secret SSH
         └── settings.rs            # Windows Registry autostart integration
 ```
 
 ---
+
+## 🔐 Keamanan Server Monitoring
+
+- Config server dan `known_hosts` disimpan di app data dir backend (`servers.json`); WebView tidak bisa menulisnya langsung.
+- Command probe hanya menerima `serverId`; host, port, username, key path, dan known_hosts diambil dari store backend.
+- Host key pertama harus dikonfirmasi lewat fingerprint (`SHA256:...`). Perubahan host key ditolak.
+- Password/passphrase hanya di Windows Credential Manager atau memori sesi. Plaintext tidak pernah dikembalikan ke WebView.
+- Credential diikat ke `host:port:username`; mengganti identitas server otomatis menghapus credential lama.
+- CSP ketat diaktifkan; hanya font, gambar Unsplash, dan API cuaca yang diizinkan.
 
 ## 🔒 Izin & Notifikasi WhatsApp
 

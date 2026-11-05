@@ -1,5 +1,8 @@
 pub mod battery;
 pub mod clipboard;
+pub mod credentials;
+pub mod server_store;
+pub mod servers;
 pub mod hittest;
 pub mod media;
 pub mod notifications;
@@ -268,6 +271,12 @@ pub fn run() {
             clipboard::clipboard_delete_image_file,
             clipboard::clipboard_clear_image_cache,
             battery::get_battery_snapshot,
+            servers::server_probe,
+            servers::server_confirm_host_key,
+            server_store::servers_list,
+            server_store::server_upsert,
+            server_store::server_delete,
+            server_store::server_credential_save,
         ])
         .run(tauri::generate_context!());
 

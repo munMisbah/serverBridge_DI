@@ -15,7 +15,8 @@ export type ActiveTab =
   | 'calendar'
   | 'notifications'
   | 'clipboard'
-  | 'battery';
+  | 'battery'
+  | 'servers';
 
 export interface SystemBattery {
   level: number; // 0-100
@@ -47,6 +48,73 @@ export interface BatterySnapshot {
   bluetooth: BluetoothBatteryDevice[];
   updatedAt: number;
 }
+
+export type ServerAuthType = 'password' | 'key';
+
+export interface ServerConfig {
+  id: string;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  authType: ServerAuthType;
+  keyPath?: string | null;
+  rememberCredential: boolean;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface ServerUpsertInput {
+  id?: string;
+  name: string;
+  host: string;
+  port: number;
+  username: string;
+  authType: ServerAuthType;
+  keyPath?: string;
+  rememberCredential: boolean;
+}
+
+export interface ServerUpsertResult {
+  server: ServerConfig;
+  credentialCleared: boolean;
+}
+
+export interface DockerContainerInfo {
+  id: string;
+  name: string;
+  image: string;
+  state: string;
+  status: string;
+}
+
+export interface ServerSnapshot {
+  serverId: string;
+  hostname: string;
+  cpuPercent: number;
+  cpuCount: number;
+  ramUsedBytes: number;
+  ramTotalBytes: number;
+  diskUsedBytes: number;
+  diskTotalBytes: number;
+  uptimeSeconds: number;
+  dockerAvailable: boolean;
+  docker: DockerContainerInfo[];
+  latencyMs: number;
+  updatedAt: number;
+}
+
+export interface TrustPrompt {
+  fingerprint: string;
+  keyType: string;
+  host: string;
+  port: number;
+}
+
+export type ServerProbeOutcome =
+  | { status: 'ok'; snapshot: ServerSnapshot }
+  | ({ status: 'needsTrust' } & TrustPrompt)
+  | { status: 'error'; message: string };
 
 export interface TodoItem {
   id: string;
