@@ -4,11 +4,49 @@ export type IslandStyle = 'pill' | 'notch';
 
 export type ExpandTrigger = 'hover' | 'click';
 
-export type CompactSlotType = 'weather' | 'clock' | 'todo' | 'media' | 'clipboard';
+export type CompactSlotType = 'weather' | 'clock' | 'todo' | 'media' | 'clipboard' | 'battery';
 
 export type MediaSlotPlacement = 'right' | 'left';
 
-export type ActiveTab = 'todo' | 'all' | 'weather' | 'calendar' | 'notifications' | 'clipboard';
+export type ActiveTab =
+  | 'todo'
+  | 'all'
+  | 'weather'
+  | 'calendar'
+  | 'notifications'
+  | 'clipboard'
+  | 'battery';
+
+export interface SystemBattery {
+  level: number; // 0-100
+  charging: boolean;
+  pluggedIn: boolean;
+}
+
+export type BatteryDeviceKind =
+  | 'headphones'
+  | 'earbuds'
+  | 'keyboard'
+  | 'mouse'
+  | 'speaker'
+  | 'watch'
+  | 'phone'
+  | 'controller'
+  | 'bluetooth';
+
+export interface BluetoothBatteryDevice {
+  id: string;
+  name: string;
+  kind: BatteryDeviceKind;
+  level: number; // 0-100
+  connected: boolean;
+}
+
+export interface BatterySnapshot {
+  system: SystemBattery | null;
+  bluetooth: BluetoothBatteryDevice[];
+  updatedAt: number;
+}
 
 export interface TodoItem {
   id: string;

@@ -216,13 +216,14 @@ export const SettingsWindow: React.FC = () => {
               <span className="font-semibold text-white">Slot Sisi Kiri</span>
               <span className="text-[10px] text-neutral-400 capitalize">{settings.compactLeftSlot || 'weather'}</span>
             </div>
-            <div className="grid grid-cols-5 gap-1">
+            <div className="grid grid-cols-6 gap-1">
               {[
                 { id: 'weather', label: 'Cuaca', icon: '⛅' },
                 { id: 'clock', label: 'Jam', icon: '⏰' },
                 { id: 'todo', label: 'Todo', icon: '✅' },
                 { id: 'media', label: 'Musik', icon: '🎵' },
                 { id: 'clipboard', label: 'Clip', icon: '📋' },
+                { id: 'battery', label: 'Baterai', icon: '🔋' },
               ].map((opt) => {
                 const isActive = (settings.compactLeftSlot || 'weather') === opt.id;
                 return (
@@ -250,13 +251,14 @@ export const SettingsWindow: React.FC = () => {
               <span className="font-semibold text-white">Slot Sisi Kanan</span>
               <span className="text-[10px] text-neutral-400 capitalize">{settings.compactRightSlot || 'clock'}</span>
             </div>
-            <div className="grid grid-cols-5 gap-1">
+            <div className="grid grid-cols-6 gap-1">
               {[
                 { id: 'clock', label: 'Jam', icon: '⏰' },
                 { id: 'weather', label: 'Cuaca', icon: '⛅' },
                 { id: 'todo', label: 'Todo', icon: '✅' },
                 { id: 'media', label: 'Musik', icon: '🎵' },
                 { id: 'clipboard', label: 'Clip', icon: '📋' },
+                { id: 'battery', label: 'Baterai', icon: '🔋' },
               ].map((opt) => {
                 const isActive = (settings.compactRightSlot || 'clock') === opt.id;
                 return (

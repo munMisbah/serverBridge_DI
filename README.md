@@ -29,6 +29,7 @@ Anda tinggal menyalin/mengunduh file ini ke laptop/PC Windows 11 Anda, lalu doub
 - **Cuaca Terkini (Open-Meteo API):** Suhu real-time, kondisi cuaca, feels like, kelembapan, kecepatan angin, suhu min/max, pencarian lokasi (Jakarta, Surabaya, Bandung, Bali, Singapura, Tokyo, London, dll.), dan sistem cache offline jika internet terputus.
 - **Kalender & Agenda Lokal:** Tampilan tanggal hari ini, daftar agenda kronologis, countdown waktu tersisa, form pembuatan agenda baru (Judul, Jam, Lokasi), tombol hapus, dan penyimpanan persisten.
 - **Windows Notification Bridge:** Menggunakan WinRT `UserNotificationListener` untuk mendengarkan notifikasi Windows 10/11 dan WhatsApp Desktop secara native. Dilengkapi filter blocklist dan privacy toggle (menyembunyikan isi pesan).
+- **Battery Monitor:** Indikator persentase baterai laptop (dengan status charging/plugged in) dan daftar perangkat Bluetooth yang melaporkan level baterai ke Windows — TWS, headphone, keyboard, mouse, speaker, dan lainnya. Tampil sebagai tab Battery bergaya Todo (ring progres + daftar perangkat) dan bisa dipasang pada slot dinamis kapsul.
 - **Media Controls Widget:** Kontrol pemutar audio cepat (Play/Pause, track info) yang tampil di Overview saat media sedang diputar.
 - **Pengaturan Lengkap:** Mode interaksi **Hover / Click** untuk expand-collapse, konfigurasi Autostart, Always on Top, durasi auto-collapse notifikasi, interval refresh cuaca, dan Reduced Motion.
 
@@ -137,6 +138,7 @@ DI-win/
 │   │       ├── WeatherTab.tsx     # Tab detail cuaca & pemilih kota
 │   │       ├── CalendarTab.tsx    # Tab agenda & pembuatan jadwal
 │   │       ├── NotificationsTab.tsx # Tab history notifikasi & izin Windows
+│   │       ├── BatteryTab.tsx     # Tab baterai laptop & perangkat Bluetooth
 │   │       └── SettingsTab.tsx    # Tab pengaturan interaksi, autostart & privasi
 └── src-tauri/
     ├── Cargo.toml                 # Dependensi Rust & Windows WinRT crates
@@ -149,6 +151,7 @@ DI-win/
         ├── window.rs              # Posisi & ukuran window fixed (504×508)
         ├── hittest.rs             # Native click-through hover/hit-test loop
         ├── notifications.rs       # WinRT UserNotificationListener bridge
+        ├── battery.rs             # Snapshot baterai sistem & perangkat Bluetooth
         └── settings.rs            # Windows Registry autostart integration
 ```
 

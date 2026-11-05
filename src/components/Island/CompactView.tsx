@@ -5,13 +5,17 @@ import { CloudIcon } from '@solar-icons/react/bold/cloud';
 import { CheckCircleIcon } from '@solar-icons/react/bold/check-circle';
 import { ClipboardListIcon } from '@solar-icons/react/bold/clipboard-list';
 import { MusicNote2Icon } from '@solar-icons/react/bold/music-note-2';
+import { BatteryFullIcon } from '@solar-icons/react/bold/battery-full';
+import { BatteryHalfIcon } from '@solar-icons/react/bold/battery-half';
+import { BatteryLowIcon } from '@solar-icons/react/bold/battery-low';
+import { BatteryChargeIcon } from '@solar-icons/react/bold/battery-charge';
 import { useIsland } from '../../context/IslandContext';
 import { detectMediaApp } from '../../utils/mediaTheme';
 import { PixelRoboticEyes } from './PixelRoboticEyes';
 import { CompactSlotType } from '../../types';
 
 export const CompactView: React.FC = () => {
-  const { weather, settings, audioPlayback, todos, clipboardItems } = useIsland();
+  const { weather, settings, audioPlayback, todos, clipboardItems, battery } = useIsland();
   const [now, setNow] = useState(() => new Date());
   const isPlaying = audioPlayback?.isPlaying ?? false;
   const islandStyle = settings.islandStyle || 'pill';
@@ -88,6 +92,42 @@ export const CompactView: React.FC = () => {
             <ClipboardListIcon size={13} className="text-cyan-400" />
             <span className="text-[11px] font-semibold tabular-nums tracking-tight text-neutral-200 font-sans">
               {count > 0 ? `${count}` : '0'}
+            </span>
+          </div>
+        );
+      }
+
+      case 'battery': {
+        const system = battery?.system ?? null;
+        if (!system) {
+          return (
+            <div className="flex items-center gap-1 shrink-0" title="Tidak ada baterai sistem">
+              <BatteryFullIcon size={13} className="text-neutral-500" />
+              <span className="text-[11px] font-semibold text-neutral-400 font-sans">--</span>
+            </div>
+          );
+        }
+        const BatteryIcon = system.charging
+          ? BatteryChargeIcon
+          : system.level > 60
+            ? BatteryFullIcon
+            : system.level > 20
+              ? BatteryHalfIcon
+              : BatteryLowIcon;
+        const tone =
+          system.charging || system.level > 35
+            ? 'text-emerald-400'
+            : system.level > 15
+              ? 'text-amber-400'
+              : 'text-red-400';
+        return (
+          <div
+            className="flex items-center gap-1 shrink-0"
+            title={`Baterai laptop: ${system.level}%${system.charging ? ' (mengisi daya)' : ''}`}
+          >
+            <BatteryIcon size={13} className={tone} />
+            <span className="text-[11px] font-semibold tabular-nums tracking-tight text-neutral-200 font-sans">
+              {system.level}%
             </span>
           </div>
         );

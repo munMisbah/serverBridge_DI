@@ -1,3 +1,4 @@
+pub mod battery;
 pub mod clipboard;
 pub mod hittest;
 pub mod media;
@@ -266,6 +267,7 @@ pub fn run() {
             clipboard::clipboard_write_image,
             clipboard::clipboard_delete_image_file,
             clipboard::clipboard_clear_image_cache,
+            battery::get_battery_snapshot,
         ])
         .run(tauri::generate_context!());
 

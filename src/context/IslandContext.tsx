@@ -1,6 +1,7 @@
 import { DEFAULT_WEATHER_LOCATION } from '../utils/locations';
 import { NOTE_COLORS, NOTE_DEFAULT_HEIGHT, NOTE_DEFAULT_WIDTH } from '../utils/notes';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { invoke } from '@tauri-apps/api/core';
 import {
   IslandState,
   AppNotification,
@@ -12,6 +13,7 @@ import {
   ActiveTab,
   TodoItem,
   NoteItem,
+  BatterySnapshot,
 } from '../types';
 
 interface IslandContextType {
@@ -26,6 +28,10 @@ interface IslandContextType {
   weatherLoading: boolean;
   weatherError: string | null;
   refreshWeather: () => Promise<void>;
+  battery: BatterySnapshot | null;
+  batteryLoading: boolean;
+  batteryError: string | null;
+  refreshBattery: () => Promise<void>;
   events: CalendarEvent[];
   addEvent: (event: Omit<CalendarEvent, 'id' | 'createdAt' | 'updatedAt'>) => void;
   updateEvent: (id: string, event: Partial<CalendarEvent>) => void;
@@ -179,6 +185,17 @@ const DEFAULT_AUDIO_PLAYBACK: AudioPlaybackState = {
   coverUrl: 'https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?w=160&auto=format&fit=crop&q=80',
 };
 
+// Browser preview only: native Tauri builds always read the real hardware.
+const DEFAULT_BATTERY: BatterySnapshot = {
+  system: { level: 76, charging: true, pluggedIn: true },
+  bluetooth: [
+    { id: 'demo-headphones', name: 'WH-1000XM4', kind: 'headphones', level: 64, connected: true },
+    { id: 'demo-keyboard', name: 'Keychron K3', kind: 'keyboard', level: 82, connected: true },
+    { id: 'demo-earbuds', name: 'Galaxy Buds2 Pro', kind: 'earbuds', level: 47, connected: true },
+  ],
+  updatedAt: Date.now(),
+};
+
 const SAMPLE_SCREENSHOT_THUMBNAIL = 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="320" height="180" viewBox="0 0 320 180"><defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="%231e293b"/><stop offset="100%" stop-color="%230f172a"/></linearGradient></defs><rect width="320" height="180" rx="12" fill="url(%23g)"/><rect x="20" y="24" width="280" height="28" rx="6" fill="%23334155"/><rect x="20" y="62" width="130" height="94" rx="8" fill="%230284c7" opacity="0.4"/><rect x="160" y="62" width="140" height="94" rx="8" fill="%236366f1" opacity="0.4"/><circle cx="36" cy="38" r="4" fill="%23ef4444"/><circle cx="48" cy="38" r="4" fill="%23eab308"/><circle cx="60" cy="38" r="4" fill="%2322c55e"/><text x="160" y="112" font-family="sans-serif" font-size="12" fill="%2394a3b8" text-anchor="middle">Screenshot Preview (1920 × 1080)</text></svg>';
 
 const INITIAL_CLIPBOARD_ITEMS: ClipboardItem[] = [
@@ -278,6 +295,11 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   });
   const [audioPlayback, setAudioPlayback] = useState<AudioPlaybackState | null>(DEFAULT_AUDIO_PLAYBACK);
+  const [battery, setBattery] = useState<BatterySnapshot | null>(() =>
+    typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window ? null : DEFAULT_BATTERY
+  );
+  const [batteryLoading, setBatteryLoading] = useState(false);
+  const [batteryError, setBatteryError] = useState<string | null>(null);
   const dismissTimerRef = useRef<number | undefined>(undefined);
   const settingsRef = useRef(settings);
   useEffect(() => {
@@ -477,6 +499,38 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const timer = setInterval(refreshWeather, intervalMs);
     return () => clearInterval(timer);
   }, [refreshWeather, settings.weatherRefreshInterval]);
+
+  // Battery snapshots are cheap but hardware-backed; refresh once a minute and
+  // whenever the window becomes visible again.
+  const refreshBattery = useCallback(async () => {
+    if (typeof window === 'undefined' || !('__TAURI_INTERNALS__' in window)) {
+      return;
+    }
+    setBatteryLoading(true);
+    try {
+      const snapshot = await invoke<BatterySnapshot>('get_battery_snapshot');
+      setBattery(snapshot);
+      setBatteryError(null);
+    } catch (err) {
+      console.warn('Battery snapshot failed:', err);
+      setBatteryError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBatteryLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const load = () => {
+      if (!document.hidden) refreshBattery();
+    };
+    load();
+    const timer = setInterval(load, 60 * 1000);
+    document.addEventListener('visibilitychange', load);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', load);
+    };
+  }, [refreshBattery]);
 
   // Push new notification
   const pushNotification = useCallback(
@@ -944,6 +998,10 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         weatherLoading,
         weatherError,
         refreshWeather,
+        battery,
+        batteryLoading,
+        batteryError,
+        refreshBattery,
         events,
         addEvent,
         updateEvent,
