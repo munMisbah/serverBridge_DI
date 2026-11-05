@@ -20,8 +20,9 @@ pub struct StoredServer {
     pub auth_type: String,
     pub key_path: Option<String>,
     pub remember_credential: bool,
-    /// Backend-only host-key trust store. Never serialized to the WebView.
-    #[serde(default, skip_serializing)]
+    /// Backend-only host-key trust store. Persisted to disk but never sent over
+    /// IPC: `ServerView` is the struct the WebView receives.
+    #[serde(default)]
     pub known_hosts: String,
     pub created_at: u64,
     pub updated_at: u64,
@@ -46,10 +47,44 @@ pub struct ServerUpsert {
     pub remember_credential: bool,
 }
 
+/// IPC-facing view of a server: everything except the backend-only host-key
+/// trust store.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerView {
+    pub id: String,
+    pub name: String,
+    pub host: String,
+    pub port: u16,
+    pub username: String,
+    pub auth_type: String,
+    pub key_path: Option<String>,
+    pub remember_credential: bool,
+    pub created_at: u64,
+    pub updated_at: u64,
+}
+
+impl From<&StoredServer> for ServerView {
+    fn from(server: &StoredServer) -> Self {
+        Self {
+            id: server.id.clone(),
+            name: server.name.clone(),
+            host: server.host.clone(),
+            port: server.port,
+            username: server.username.clone(),
+            auth_type: server.auth_type.clone(),
+            key_path: server.key_path.clone(),
+            remember_credential: server.remember_credential,
+            created_at: server.created_at,
+            updated_at: server.updated_at,
+        }
+    }
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ServerUpsertResult {
-    pub server: StoredServer,
+    pub server: ServerView,
     pub credential_cleared: bool,
 }
 
@@ -143,9 +178,10 @@ fn clean(value: &str, field: &str, max: usize) -> Result<String, String> {
 }
 
 #[tauri::command]
-pub fn servers_list(app: AppHandle) -> Result<Vec<StoredServer>, String> {
+pub fn servers_list(app: AppHandle) -> Result<Vec<ServerView>, String> {
     let _guard = STORE_LOCK.lock().map_err(|_| "Server store lock poisoned")?;
-    load_unlocked(&app)
+    let servers = load_unlocked(&app)?;
+    Ok(servers.iter().map(ServerView::from).collect())
 }
 
 #[tauri::command]
@@ -255,7 +291,7 @@ pub fn server_upsert(
     }
 
     Ok(ServerUpsertResult {
-        server,
+        server: ServerView::from(&server),
         credential_cleared,
     })
 }
