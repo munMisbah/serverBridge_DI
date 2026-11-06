@@ -45,7 +45,74 @@ const DEMO_SNAPSHOT: Omit<ServerSnapshot, 'serverId' | 'updatedAt'> = {
 const globalSnapshotCache: Record<string, ServerSnapshot> = {};
 const globalErrorCache: Record<string, string> = {};
 const globalTrustCache: Record<string, TrustPrompt> = {};
+const MAX_HISTORY_POINTS = 30;
+const globalHistoryCache: Record<string, { cpu: number[]; ram: number[] }> = {};
 
+interface MiniSparklineProps {
+  data: number[];
+  color?: string;
+  height?: number;
+}
+
+const MiniSparkline: React.FC<MiniSparklineProps> = ({
+  data,
+  color = '#38bdf8',
+  height = 20,
+}) => {
+  if (!data || data.length < 2) {
+    return (
+      <div style={{ height }} className="flex items-center justify-center opacity-25">
+        <div className="h-px w-full border-b border-dashed border-white/20" />
+      </div>
+    );
+  }
+
+  const w = 100;
+  const h = height;
+  const padY = 2;
+  const maxVal = 100;
+  const minVal = 0;
+
+  const step = w / Math.max(data.length - 1, 1);
+  const coords = data.map((val, idx) => {
+    const clamped = Math.max(minVal, Math.min(maxVal, val));
+    const x = idx * step;
+    const y = (h - padY) - ((clamped - minVal) / (maxVal - minVal)) * (h - padY * 2);
+    return { x: Number(x.toFixed(1)), y: Number(y.toFixed(1)) };
+  });
+
+  const polylineStr = coords.map((pt) => `${pt.x},${pt.y}`).join(' ');
+  const lastPt = coords[coords.length - 1];
+  const areaPath = `M ${coords[0].x},${h} L ${coords.map((pt) => `${pt.x},${pt.y}`).join(' L ')} L ${lastPt.x},${h} Z`;
+  const gradId = `spark-grad-${color.replace('#', '')}`;
+
+  return (
+    <div className="relative w-full overflow-hidden" style={{ height }}>
+      <svg
+        viewBox={`0 0 ${w} ${h}`}
+        preserveAspectRatio="none"
+        className="h-full w-full overflow-visible"
+      >
+        <defs>
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.28" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.0" />
+          </linearGradient>
+        </defs>
+        <path d={areaPath} fill={`url(#${gradId})`} />
+        <polyline
+          points={polylineStr}
+          fill="none"
+          stroke={color}
+          strokeWidth="1.2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        <circle cx={lastPt.x} cy={lastPt.y} r="1.8" fill={color} />
+      </svg>
+    </div>
+  );
+};
 type IconComponent = React.ComponentType<{ size?: number; className?: string }>;
 const formatBytes = (bytes: number): string => {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -74,6 +141,8 @@ interface MetricCardProps {
   detail: string;
   percent: number;
   showPercent?: boolean;
+  history?: number[];
+  accentColor?: string;
 }
 
 const MetricCard: React.FC<MetricCardProps> = ({
@@ -83,29 +152,46 @@ const MetricCard: React.FC<MetricCardProps> = ({
   detail,
   percent,
   showPercent = true,
-}) => (
-  <div className="rounded-xl bg-white/[0.03] p-2">
-    <div className="flex items-center gap-1 text-[8.5px] font-semibold uppercase tracking-wide text-neutral-400">
-      <Icon size={10} />
-      {label}
-    </div>
-    <div className="mt-0.5 flex items-baseline justify-between gap-1">
-      <span className="text-[14px] font-bold tabular-nums leading-none">{value}</span>
-      {showPercent && (
-        <span className="text-[9px] tabular-nums text-neutral-400">{Math.round(percent)}%</span>
+  history,
+  accentColor,
+}) => {
+  const color =
+    accentColor ?? (percent >= 90 ? '#ef4444' : percent >= 70 ? '#f59e0b' : '#10b981');
+
+  return (
+    <div className="flex flex-col justify-between rounded-xl bg-white/[0.03] p-2 overflow-hidden">
+      <div>
+        <div className="flex items-center gap-1 text-[8.5px] font-semibold uppercase tracking-wide text-neutral-400">
+          <Icon size={10} />
+          {label}
+        </div>
+        <div className="mt-0.5 flex items-baseline justify-between gap-1">
+          <span className="text-[13px] font-bold tabular-nums leading-none">{value}</span>
+          {showPercent && (
+            <span className="text-[9px] tabular-nums text-neutral-400">{Math.round(percent)}%</span>
+          )}
+        </div>
+      </div>
+
+      {history && history.length > 0 ? (
+        <div className="my-1">
+          <MiniSparkline data={history} color={color} height={18} />
+        </div>
+      ) : (
+        <div className="my-1.5 h-1 overflow-hidden rounded-full bg-neutral-800">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${
+              percent >= 90 ? 'bg-red-500' : percent >= 70 ? 'bg-amber-400' : 'bg-emerald-500'
+            }`}
+            style={{ width: `${percent}%` }}
+          />
+        </div>
       )}
+
+      <p className="truncate text-[8px] text-neutral-500">{detail}</p>
     </div>
-    <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-neutral-800">
-      <div
-        className={`h-full rounded-full transition-all duration-500 ${
-          percent >= 90 ? 'bg-red-500' : percent >= 70 ? 'bg-amber-400' : 'bg-emerald-500'
-        }`}
-        style={{ width: `${percent}%` }}
-      />
-    </div>
-    <p className="mt-0.5 truncate text-[8.5px] text-neutral-500">{detail}</p>
-  </div>
-);
+  );
+};
 
 interface ServerFormValues {
   name: string;
@@ -376,12 +462,14 @@ export const ServersTab: React.FC = () => {
   const [trustPrompts, setTrustPrompts] = useState<Record<string, TrustPrompt>>(() => ({
     ...globalTrustCache,
   }));
+  const [history, setHistory] = useState<Record<string, { cpu: number[]; ram: number[] }>>(() => ({
+    ...globalHistoryCache,
+  }));
   const [loading, setLoading] = useState(() => Object.keys(globalSnapshotCache).length === 0);
   const [formState, setFormState] = useState<{ mode: 'new' } | { mode: 'edit'; server: ServerConfig } | null>(
     null
   );
   const [refreshToken, setRefreshToken] = useState(0);
-
   const serversRef = useRef(servers);
   serversRef.current = servers;
   const secretsRef = useRef(serverSecrets);
@@ -394,10 +482,33 @@ export const ServersTab: React.FC = () => {
 
     if (!isTauri) {
       const now = Date.now();
+      const demoCpu = 16 + Math.round(Math.sin(now / 1500) * 10 + Math.random() * 6);
+      const demoRamPct = 40 + Math.round(Math.cos(now / 2500) * 4);
       setSnapshots((prev) => {
         const next = { ...prev };
         for (const server of list) {
-          next[server.id] = { ...DEMO_SNAPSHOT, serverId: server.id, updatedAt: now };
+          next[server.id] = {
+            ...DEMO_SNAPSHOT,
+            serverId: server.id,
+            cpuPercent: Math.max(5, Math.min(95, demoCpu)),
+            updatedAt: now,
+          };
+        }
+        return next;
+      });
+      setHistory((prev) => {
+        const next = { ...prev };
+        for (const server of list) {
+          const curr = next[server.id] ?? {
+            cpu: [14, 16, 18, 15, 20, 22, 26, 23, 21, 25, 28, 24, 20, 18, 22, 25, 24, 21, 19, 23],
+            ram: [39, 39, 40, 40, 41, 41, 42, 42, 41, 41, 40, 40, 41, 42, 41, 41, 42, 41, 40, 40],
+          };
+          const updated = {
+            cpu: [...curr.cpu.slice(-MAX_HISTORY_POINTS + 1), demoCpu],
+            ram: [...curr.ram.slice(-MAX_HISTORY_POINTS + 1), demoRamPct],
+          };
+          next[server.id] = updated;
+          globalHistoryCache[server.id] = updated;
         }
         return next;
       });
@@ -421,6 +532,22 @@ export const ServersTab: React.FC = () => {
             globalSnapshotCache[server.id] = outcome.snapshot;
             delete globalErrorCache[server.id];
             delete globalTrustCache[server.id];
+
+            const ramPct =
+              outcome.snapshot.ramTotalBytes > 0
+                ? (outcome.snapshot.ramUsedBytes / outcome.snapshot.ramTotalBytes) * 100
+                : 0;
+
+            setHistory((prev) => {
+              const curr = prev[server.id] ?? { cpu: [], ram: [] };
+              const nextEntry = {
+                cpu: [...curr.cpu.slice(-MAX_HISTORY_POINTS + 1), outcome.snapshot.cpuPercent],
+                ram: [...curr.ram.slice(-MAX_HISTORY_POINTS + 1), ramPct],
+              };
+              globalHistoryCache[server.id] = nextEntry;
+              return { ...prev, [server.id]: nextEntry };
+            });
+
             setSnapshots((prev) => ({ ...prev, [server.id]: outcome.snapshot }));
             setErrors((prev) => {
               if (!(server.id in prev)) return prev;
@@ -795,6 +922,8 @@ export const ServersTab: React.FC = () => {
                     detail={`${snapshot.cpuCount} cores`}
                     percent={snapshot.cpuPercent}
                     showPercent={false}
+                    history={selected ? history[selected.id]?.cpu : undefined}
+                    accentColor="#38bdf8"
                   />
                   <MetricCard
                     icon={DatabaseIcon}
@@ -802,6 +931,8 @@ export const ServersTab: React.FC = () => {
                     value={formatBytes(snapshot.ramUsedBytes)}
                     detail={`of ${formatBytes(snapshot.ramTotalBytes)}`}
                     percent={ramPercent}
+                    history={selected ? history[selected.id]?.ram : undefined}
+                    accentColor="#a855f7"
                   />
                   <MetricCard
                     icon={SsdSquareIcon}
