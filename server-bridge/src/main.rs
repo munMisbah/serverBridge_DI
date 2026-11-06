@@ -46,6 +46,8 @@ struct AppState {
     token: Option<String>,
     cpu_percent: Arc<AtomicU32>, // stored as (percent * 100) as u32
     paths: HostPaths,
+    docker_cache: Arc<tokio::sync::Mutex<(u64, bool, Vec<DockerContainerInfo>)>>,
+    disk_cache: Arc<tokio::sync::Mutex<(u64, u64, u64)>>,
 }
 
 #[derive(Clone)]
@@ -163,6 +165,8 @@ async fn main() {
         token,
         cpu_percent,
         paths,
+        docker_cache: Arc::new(tokio::sync::Mutex::new((0, false, Vec::new()))),
+        disk_cache: Arc::new(tokio::sync::Mutex::new((0, 0, 0))),
     };
 
     let app = Router::new()
@@ -232,15 +236,32 @@ async fn collect_host_stats(state: &AppState) -> BridgeStatsResponse {
     // 3. RAM (Used & Total)
     let (ram_used, ram_total) = read_meminfo(&state.paths.proc_dir).await;
 
-    // 4. Disk (Used & Total)
-    let (disk_used, disk_total) = read_statvfs(&state.paths.root_dir);
+    // 4. Disk (Used & Total) - Cached for 5s to eliminate unnecessary syscalls at 1Hz
+    let (disk_used, disk_total) = {
+        let mut cache = state.disk_cache.lock().await;
+        if now.saturating_sub(cache.0) > 5000 {
+            let (u, t) = read_statvfs(&state.paths.root_dir);
+            *cache = (now, u, t);
+            (u, t)
+        } else {
+            (cache.1, cache.2)
+        }
+    };
 
     // 5. Uptime
     let uptime = read_uptime(&state.paths.proc_dir).await;
 
-    // 6. Docker Containers
-    let (docker_available, docker) = read_docker_containers(&state.paths.docker_sock).await;
-
+    // 6. Docker Containers - Cached for 5s to prevent hammering dockerd at 1Hz
+    let (docker_available, docker) = {
+        let mut cache = state.docker_cache.lock().await;
+        if now.saturating_sub(cache.0) > 5000 {
+            let (avail, list) = read_docker_containers(&state.paths.docker_sock).await;
+            *cache = (now, avail, list.clone());
+            (avail, list)
+        } else {
+            (cache.1, cache.2.clone())
+        }
+    };
     BridgeStatsResponse {
         hostname,
         cpu_percent: (cpu_percent * 10.0).round() / 10.0,

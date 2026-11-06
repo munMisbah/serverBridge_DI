@@ -19,7 +19,7 @@ import {
   TrustPrompt,
 } from '../../types';
 
-const REFRESH_INTERVAL_MS = 30_000;
+const REFRESH_INTERVAL_MS = 1_000;
 const GB = 1024 ** 3;
 
 const DEMO_SNAPSHOT: Omit<ServerSnapshot, 'serverId' | 'updatedAt'> = {
@@ -388,7 +388,7 @@ export const ServersTab: React.FC = () => {
   secretsRef.current = serverSecrets;
   const inFlight = useRef(false);
 
-  const probeAll = useCallback(async () => {
+  const probeAll = useCallback(async (isManual = false) => {
     const list = serversRef.current;
     if (!list.length || inFlight.current) return;
 
@@ -407,7 +407,9 @@ export const ServersTab: React.FC = () => {
     }
 
     inFlight.current = true;
-    setLoading(true);
+    if (isManual || Object.keys(globalSnapshotCache).length === 0) {
+      setLoading(true);
+    }
     try {
       await Promise.all(
         list.map(async (server) => {
@@ -476,8 +478,12 @@ export const ServersTab: React.FC = () => {
 
   useEffect(() => {
     if (!servers.length) return;
-    void probeAll();
-    const timer = window.setInterval(() => void probeAll(), REFRESH_INTERVAL_MS);
+    void probeAll(true);
+    const timer = window.setInterval(() => {
+      if (!document.hidden) {
+        void probeAll(false);
+      }
+    }, REFRESH_INTERVAL_MS);
     return () => window.clearInterval(timer);
   }, [probeAll, servers.length, refreshToken]);
 
@@ -708,7 +714,7 @@ export const ServersTab: React.FC = () => {
               </div>
               <button
                 type="button"
-                onClick={() => void probeAll()}
+                onClick={() => void probeAll(true)}
                 title="Refresh semua server"
                 aria-label="Refresh semua server"
                 className="flex h-6 w-6 items-center justify-center rounded-md text-white/40 transition-colors hover:bg-white/10 hover:text-white"
