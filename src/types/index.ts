@@ -49,7 +49,7 @@ export interface BatterySnapshot {
   updatedAt: number;
 }
 
-export type ServerAuthType = 'password' | 'key';
+export type ServerAuthType = 'password' | 'key' | 'bridge';
 
 export interface ServerConfig {
   id: string;

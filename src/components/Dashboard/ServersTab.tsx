@@ -40,8 +40,13 @@ const DEMO_SNAPSHOT: Omit<ServerSnapshot, 'serverId' | 'updatedAt'> = {
   latencyMs: 42,
 };
 
-type IconComponent = React.ComponentType<{ size?: number; className?: string }>;
+// Module-level persistent cache: keeps last-known metrics alive across tab switches
+// so opening the Servers tab displays immediately without waiting for round-trips!
+const globalSnapshotCache: Record<string, ServerSnapshot> = {};
+const globalErrorCache: Record<string, string> = {};
+const globalTrustCache: Record<string, TrustPrompt> = {};
 
+type IconComponent = React.ComponentType<{ size?: number; className?: string }>;
 const formatBytes = (bytes: number): string => {
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
   let value = bytes;
@@ -127,12 +132,12 @@ const ServerForm: React.FC<ServerFormProps> = ({ initial, isTauri, onCancel, onS
   const [values, setValues] = useState<ServerFormValues>(() => ({
     name: initial?.name ?? '',
     host: initial?.host ?? '',
-    port: initial?.port ?? 22,
+    port: initial?.port ?? (initial?.authType === 'bridge' ? 8765 : 22),
     username: initial?.username ?? '',
-    authType: initial?.authType ?? 'key',
+    authType: initial?.authType ?? 'bridge',
     keyPath: initial?.keyPath ?? '',
     secret: '',
-    remember: initial?.rememberCredential ?? false,
+    remember: initial?.rememberCredential ?? true,
   }));
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -141,8 +146,12 @@ const ServerForm: React.FC<ServerFormProps> = ({ initial, isTauri, onCancel, onS
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    if (!values.host.trim() || !values.username.trim()) {
-      setError('Host dan username wajib diisi');
+    if (!values.host.trim()) {
+      setError('Host / IP server wajib diisi');
+      return;
+    }
+    if (values.authType !== 'bridge' && !values.username.trim()) {
+      setError('Username wajib diisi untuk SSH');
       return;
     }
     if (values.authType === 'key' && !values.keyPath.trim()) {
@@ -153,7 +162,6 @@ const ServerForm: React.FC<ServerFormProps> = ({ initial, isTauri, onCancel, onS
       setError('Password wajib diisi untuk autentikasi password');
       return;
     }
-
     setSaving(true);
     setError(null);
     const failure = await onSave(values);
@@ -203,6 +211,50 @@ const ServerForm: React.FC<ServerFormProps> = ({ initial, isTauri, onCancel, onS
           </label>
         </div>
 
+        <div className="space-y-1">
+          <span className="text-[9px] font-medium uppercase tracking-wide text-neutral-500">Metode Koneksi</span>
+          <div className="grid grid-cols-3 gap-1.5">
+            {(
+              [
+                { id: 'bridge', label: 'Bridge Agent' },
+                { id: 'password', label: 'SSH Password' },
+                { id: 'key', label: 'SSH Key' },
+              ] as const
+            ).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  patch({
+                    authType: item.id,
+                    port:
+                      item.id === 'bridge'
+                        ? values.port === 22
+                          ? 8765
+                          : values.port
+                        : values.port === 8765
+                        ? 22
+                        : values.port,
+                  });
+                }}
+                className={`rounded-lg py-1.5 text-[10px] font-medium transition-colors ${
+                  values.authType === item.id
+                    ? 'bg-sky-500 text-white'
+                    : 'bg-white/[0.04] text-neutral-400 hover:bg-white/[0.08] hover:text-white'
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {values.authType === 'bridge' && (
+          <div className="rounded-lg bg-sky-500/10 border border-sky-500/20 px-2.5 py-1.5 text-[9.5px] leading-relaxed text-sky-300">
+            Membaca metrik instan (&lt;10ms) dari container <code className="font-mono bg-sky-500/20 px-1 rounded text-white">di-server-bridge</code> pada server Anda.
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-2">
           <label className="space-y-0.5">
             <span className="text-[9px] font-medium uppercase tracking-wide text-neutral-500">Port</span>
@@ -211,39 +263,21 @@ const ServerForm: React.FC<ServerFormProps> = ({ initial, isTauri, onCancel, onS
               min={1}
               max={65535}
               value={values.port}
-              onChange={(e) => patch({ port: Number(e.target.value) || 22 })}
+              onChange={(e) => patch({ port: Number(e.target.value) || (values.authType === 'bridge' ? 8765 : 22) })}
               className={inputClass}
             />
           </label>
           <label className="space-y-0.5">
-            <span className="text-[9px] font-medium uppercase tracking-wide text-neutral-500">Username</span>
+            <span className="text-[9px] font-medium uppercase tracking-wide text-neutral-500">
+              {values.authType === 'bridge' ? 'Username (opsional)' : 'Username'}
+            </span>
             <input
               value={values.username}
               onChange={(e) => patch({ username: e.target.value })}
-              placeholder="deploy"
+              placeholder={values.authType === 'bridge' ? 'bridge' : 'deploy'}
               className={inputClass}
             />
           </label>
-        </div>
-
-        <div className="space-y-1">
-          <span className="text-[9px] font-medium uppercase tracking-wide text-neutral-500">Autentikasi</span>
-          <div className="grid grid-cols-2 gap-2">
-            {(['key', 'password'] as ServerAuthType[]).map((authType) => (
-              <button
-                key={authType}
-                type="button"
-                onClick={() => patch({ authType })}
-                className={`rounded-lg py-1.5 text-[10.5px] font-medium transition-colors ${
-                  values.authType === authType
-                    ? 'bg-sky-500 text-white'
-                    : 'bg-white/[0.04] text-neutral-400 hover:bg-white/[0.08] hover:text-white'
-                }`}
-              >
-                {authType === 'key' ? 'SSH Key' : 'Password'}
-              </button>
-            ))}
-          </div>
         </div>
 
         <div className={values.authType === 'key' ? 'grid grid-cols-[1.3fr_1fr] gap-2' : ''}>
@@ -261,18 +295,27 @@ const ServerForm: React.FC<ServerFormProps> = ({ initial, isTauri, onCancel, onS
 
           <label className="space-y-0.5">
             <span className="text-[9px] font-medium uppercase tracking-wide text-neutral-500">
-              {values.authType === 'key' ? 'Passphrase (opsional)' : 'Password'}
+              {values.authType === 'bridge'
+                ? 'Bridge Token (BRIDGE_TOKEN)'
+                : values.authType === 'key'
+                ? 'Passphrase (opsional)'
+                : 'Password'}
             </span>
             <input
-              type="password"
+              type={values.authType === 'bridge' ? 'text' : 'password'}
               value={values.secret}
               onChange={(e) => patch({ secret: e.target.value })}
-              placeholder={initial ? 'Kosongkan untuk mempertahankan…' : ''}
+              placeholder={
+                values.authType === 'bridge'
+                  ? 'Masukkan BRIDGE_TOKEN (kosongkan jika tanpa token)'
+                  : initial
+                  ? 'Kosongkan untuk mempertahankan…'
+                  : ''
+              }
               className={inputClass}
             />
           </label>
         </div>
-
         </div>
 
         {error && <p className="shrink-0 pt-1 text-[10px] leading-snug text-red-400">{error}</p>}
@@ -324,10 +367,16 @@ export const ServersTab: React.FC = () => {
   const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
   const [selectedId, setSelectedId] = useState<string | null>(servers[0]?.id ?? null);
-  const [snapshots, setSnapshots] = useState<Record<string, ServerSnapshot>>({});
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const [trustPrompts, setTrustPrompts] = useState<Record<string, TrustPrompt>>({});
-  const [loading, setLoading] = useState(false);
+  const [snapshots, setSnapshots] = useState<Record<string, ServerSnapshot>>(() => ({
+    ...globalSnapshotCache,
+  }));
+  const [errors, setErrors] = useState<Record<string, string>>(() => ({
+    ...globalErrorCache,
+  }));
+  const [trustPrompts, setTrustPrompts] = useState<Record<string, TrustPrompt>>(() => ({
+    ...globalTrustCache,
+  }));
+  const [loading, setLoading] = useState(() => Object.keys(globalSnapshotCache).length === 0);
   const [formState, setFormState] = useState<{ mode: 'new' } | { mode: 'edit'; server: ServerConfig } | null>(
     null
   );
@@ -367,6 +416,9 @@ export const ServersTab: React.FC = () => {
             password: secretsRef.current[server.id],
           });
           if (outcome.status === 'ok') {
+            globalSnapshotCache[server.id] = outcome.snapshot;
+            delete globalErrorCache[server.id];
+            delete globalTrustCache[server.id];
             setSnapshots((prev) => ({ ...prev, [server.id]: outcome.snapshot }));
             setErrors((prev) => {
               if (!(server.id in prev)) return prev;
@@ -381,6 +433,13 @@ export const ServersTab: React.FC = () => {
               return next;
             });
           } else if (outcome.status === 'needsTrust') {
+            globalTrustCache[server.id] = {
+              fingerprint: outcome.fingerprint,
+              keyType: outcome.keyType,
+              host: outcome.host,
+              port: outcome.port,
+            };
+            delete globalErrorCache[server.id];
             setTrustPrompts((prev) => ({
               ...prev,
               [server.id]: {
@@ -397,6 +456,7 @@ export const ServersTab: React.FC = () => {
               return next;
             });
           } else {
+            globalErrorCache[server.id] = outcome.message;
             setErrors((prev) => ({ ...prev, [server.id]: outcome.message }));
           }
         })
@@ -454,10 +514,21 @@ export const ServersTab: React.FC = () => {
 
   const saveServer = async (values: ServerFormValues): Promise<string | null> => {
     const existing = formState?.mode === 'edit' ? formState.server : null;
-    const username = values.username.trim();
+    const username = values.authType === 'bridge' && !values.username.trim() ? 'bridge' : values.username.trim();
     const host = values.host.trim();
     const keyPath = values.authType === 'key' ? values.keyPath.trim() : undefined;
     const identityChanged =
+      existing !== null &&
+      (existing.host !== host ||
+        existing.port !== values.port ||
+        existing.username !== username ||
+        existing.authType !== values.authType);
+
+    if (identityChanged && existing.rememberCredential && !values.secret) {
+      return values.authType === 'bridge'
+        ? 'Host atau port berubah. Masukkan token Bridge baru jika diperlukan.'
+        : 'Host, port, username, atau metode auth berubah. Masukkan ulang secret untuk menyimpan credential baru.';
+    }
       existing !== null &&
       (existing.host !== host ||
         existing.port !== values.port ||
@@ -600,7 +671,7 @@ export const ServersTab: React.FC = () => {
                       {server.name}
                     </span>
                     <span className="block truncate text-[8.5px] text-neutral-500">
-                      {server.username}@{server.host}
+                      {server.authType === 'bridge' ? `bridge:${server.port}` : `${server.username}@${server.host}`}
                     </span>
                   </span>
                   {serverSnapshot && (
@@ -628,7 +699,9 @@ export const ServersTab: React.FC = () => {
               <div className="min-w-0 flex-1">
                 <p className="truncate text-[12px] font-semibold text-white/95">{selected.name}</p>
                 <p className="truncate text-[8.5px] text-neutral-500">
-                  {selected.username}@{selected.host}:{selected.port}
+                  {selected.authType === 'bridge'
+                    ? `Bridge Agent · ${selected.host}:${selected.port}`
+                    : `${selected.username}@${selected.host}:${selected.port}`}
                   {snapshot ? ` · up ${formatUptime(snapshot.uptimeSeconds)}` : ''}
                   {snapshot ? ` · ${snapshot.latencyMs} ms` : ''}
                 </p>

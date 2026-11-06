@@ -1,4 +1,5 @@
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use std::net::ToSocketAddrs;
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock, Mutex};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -49,7 +50,7 @@ pub fn clear_pending(server_id: &str) {
     }
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DockerContainer {
     pub id: String,
@@ -112,6 +113,9 @@ fn probe(app: AppHandle, server_id: String, session_password: Option<String>) ->
         Err(message) => return ProbeOutcome::Error { message },
     };
 
+    if server.auth_type == "bridge" {
+        return probe_bridge(&server, session_password);
+    }
     let started = Instant::now();
     let known_hosts_bytes = server.known_hosts.as_bytes();
     let store = Arc::new(Mutex::new(puressh::known_hosts::KnownHosts::from_bytes(
@@ -325,6 +329,142 @@ fn probe(app: AppHandle, server_id: String, session_password: Option<String>) ->
             docker_available,
             docker,
             latency_ms,
+            updated_at: now_ms(),
+        },
+    }
+}
+
+fn probe_bridge(
+    server: &crate::server_store::StoredServer,
+    session_token: Option<String>,
+) -> ProbeOutcome {
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+
+    let started = Instant::now();
+    let token = if server.remember_credential {
+        match crate::credentials::read_credential_for(&server.id, &server.identity()) {
+            Ok(token) => token,
+            Err(message) => return ProbeOutcome::Error { message },
+        }
+    } else {
+        session_token.filter(|t| !t.is_empty())
+    };
+
+    let addr = format!("{}:{}", server.host, server.port);
+    let socket_addr = match addr.to_socket_addrs().ok().and_then(|mut iter| iter.next()) {
+        Some(a) => a,
+        None => {
+            return ProbeOutcome::Error {
+                message: format!("Host tidak dapat di-resolve: {}", addr),
+            }
+        }
+    };
+
+    let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(4)) {
+        Ok(s) => s,
+        Err(e) => {
+            return ProbeOutcome::Error {
+                message: format!("Gagal terhubung ke Bridge ({}): {}", addr, e),
+            }
+        }
+    };
+
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(3)));
+
+    let auth_header = match &token {
+        Some(t) if !t.trim().is_empty() => format!("Authorization: Bearer {}\r\n", t.trim()),
+        _ => String::new(),
+    };
+
+    let request = format!(
+        "GET /api/stats HTTP/1.1\r\nHost: {}\r\nUser-Agent: DynamicIslandWin/1.0\r\n{}Connection: close\r\n\r\n",
+        server.host, auth_header
+    );
+
+    if let Err(e) = stream.write_all(request.as_bytes()) {
+        return ProbeOutcome::Error {
+            message: format!("Gagal mengirim request ke Bridge: {}", e),
+        };
+    }
+
+    let mut response_bytes = Vec::new();
+    if let Err(e) = stream.read_to_end(&mut response_bytes) {
+        return ProbeOutcome::Error {
+            message: format!("Gagal membaca respons dari Bridge: {}", e),
+        };
+    }
+
+    let mut header_end = 0;
+    for i in 0..response_bytes.len().saturating_sub(3) {
+        if &response_bytes[i..i + 4] == b"\r\n\r\n" {
+            header_end = i + 4;
+            break;
+        }
+    }
+
+    if header_end == 0 {
+        return ProbeOutcome::Error {
+            message: "Format respons Bridge tidak valid".into(),
+        };
+    }
+
+    let headers_part = String::from_utf8_lossy(&response_bytes[..header_end]);
+    let status_line = headers_part.lines().next().unwrap_or("");
+    if status_line.contains("401") {
+        return ProbeOutcome::Error {
+            message: "Token Bridge tidak valid (401 Unauthorized)".into(),
+        };
+    }
+    if !status_line.contains("200") {
+        return ProbeOutcome::Error {
+            message: format!("Bridge status error: {}", status_line),
+        };
+    }
+
+    let body = &response_bytes[header_end..];
+
+    #[derive(Deserialize)]
+    #[serde(rename_all = "camelCase")]
+    struct BridgePayload {
+        hostname: String,
+        cpu_percent: f64,
+        cpu_count: u32,
+        ram_used_bytes: u64,
+        ram_total_bytes: u64,
+        disk_used_bytes: u64,
+        disk_total_bytes: u64,
+        uptime_seconds: u64,
+        docker_available: bool,
+        docker: Vec<DockerContainer>,
+    }
+
+    let payload: BridgePayload = match serde_json::from_slice(body) {
+        Ok(p) => p,
+        Err(e) => {
+            return ProbeOutcome::Error {
+                message: format!("Gagal mem-parse JSON Bridge: {}", e),
+            }
+        }
+    };
+
+    let latency = started.elapsed().as_millis() as u64;
+
+    ProbeOutcome::Ok {
+        snapshot: ServerSnapshot {
+            server_id: server.id.clone(),
+            hostname: payload.hostname,
+            cpu_percent: payload.cpu_percent,
+            cpu_count: payload.cpu_count,
+            ram_used_bytes: payload.ram_used_bytes,
+            ram_total_bytes: payload.ram_total_bytes,
+            disk_used_bytes: payload.disk_used_bytes,
+            disk_total_bytes: payload.disk_total_bytes,
+            uptime_seconds: payload.uptime_seconds,
+            docker_available: payload.docker_available,
+            docker: payload.docker,
+            latency_ms: latency,
             updated_at: now_ms(),
         },
     }

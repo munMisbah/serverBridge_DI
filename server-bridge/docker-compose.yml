@@ -1,0 +1,20 @@
+services:
+  di-bridge:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: di-server-bridge
+    restart: unless-stopped
+    ports:
+      - "8765:8765"
+    environment:
+      - BRIDGE_PORT=8765
+      # Ganti token ini dengan token rahasia yang Anda inginkan (masukkan token ini nanti di Dynamic Island)
+      - BRIDGE_TOKEN=my-secure-bridge-token-123
+    volumes:
+      # Mount read-only metrik sistem host
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/host/root:ro
+      # Akses read-only ke Docker daemon host (opsional: untuk melihat daftar container)
+      - /var/run/docker.sock:/var/run/docker.sock:ro

@@ -190,7 +190,11 @@ pub fn server_upsert(
     input: ServerUpsert,
 ) -> Result<ServerUpsertResult, String> {
     let host = clean(&input.host, "Host", 255)?;
-    let username = clean(&input.username, "Username", 128)?;
+    let username = if input.auth_type == "bridge" && input.username.trim().is_empty() {
+        "bridge".to_string()
+    } else {
+        clean(&input.username, "Username", 128)?
+    };
     let name = if input.name.trim().is_empty() {
         host.clone()
     } else {
@@ -199,7 +203,7 @@ pub fn server_upsert(
     if input.port == 0 {
         return Err("Port tidak valid".into());
     }
-    if input.auth_type != "key" && input.auth_type != "password" {
+    if input.auth_type != "key" && input.auth_type != "password" && input.auth_type != "bridge" {
         return Err("Metode autentikasi tidak valid".into());
     }
     let key_path = input
