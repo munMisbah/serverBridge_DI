@@ -1,8 +1,13 @@
 services:
   di-bridge:
-    build:
-      context: .
-      dockerfile: Dockerfile
+    # Opsi A: Pull image dari GitHub Container Registry (Direkomendasikan)
+    # Ganti <username-github-anda> dengan username GitHub Anda (huruf kecil):
+    image: ghcr.io/<username-github-anda>/di-server-bridge:latest
+
+    # Opsi B: Build lokal dari source
+    # build:
+    #   context: .
+    #   dockerfile: Dockerfile
     container_name: di-server-bridge
     restart: unless-stopped
     ports:
