@@ -86,6 +86,8 @@ export interface DockerContainerInfo {
   image: string;
   state: string;
   status: string;
+  cpuPercent?: number | null;
+  ramUsedBytes?: number | null;
 }
 
 export interface ServerSnapshot {

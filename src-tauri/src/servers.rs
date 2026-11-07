@@ -58,6 +58,10 @@ pub struct DockerContainer {
     pub image: String,
     pub state: String,
     pub status: String,
+    #[serde(default)]
+    pub cpu_percent: Option<f64>,
+    #[serde(default)]
+    pub ram_used_bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -613,6 +617,8 @@ fn parse_docker(text: &str) -> (bool, Vec<DockerContainer>) {
                 image: parts.next()?.trim().to_string(),
                 state: parts.next()?.trim().to_string(),
                 status: parts.next()?.trim().to_string(),
+                cpu_percent: None,
+                ram_used_bytes: None,
             })
         })
         .filter(|container| !container.id.is_empty())

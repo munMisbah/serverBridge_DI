@@ -23,6 +23,10 @@ pub struct DockerContainerInfo {
     pub image: String,
     pub state: String,
     pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cpu_percent: Option<f64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ram_used_bytes: Option<u64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -441,26 +445,130 @@ async fn read_docker_containers(sock_path: &Path) -> (bool, Vec<DockerContainerI
         return (false, Vec::new());
     };
 
-    let containers: Vec<DockerContainerInfo> = raw_list
-        .into_iter()
-        .map(|c| {
-            let id = c.id.unwrap_or_default();
-            let short_id = if id.len() > 12 { id[..12].to_string() } else { id };
-            let raw_name = c
-                .names
-                .and_then(|names| names.into_iter().next())
-                .unwrap_or_default();
-            let name = raw_name.trim_start_matches('/').to_string();
+    let mut containers = Vec::new();
+    for c in raw_list {
+        let full_id = c.id.unwrap_or_default();
+        let short_id = if full_id.len() > 12 { full_id[..12].to_string() } else { full_id.clone() };
+        let raw_name = c
+            .names
+            .and_then(|names| names.into_iter().next())
+            .unwrap_or_default();
+        let name = raw_name.trim_start_matches('/').to_string();
+        let state = c.state.unwrap_or_else(|| "unknown".into());
 
-            DockerContainerInfo {
-                id: short_id,
-                name: if name.is_empty() { "container".into() } else { name },
-                image: c.image.unwrap_or_default(),
-                state: c.state.unwrap_or_else(|| "unknown".into()),
-                status: c.status.unwrap_or_default(),
-            }
-        })
-        .collect();
+        let (cpu, ram) = if state == "running" && !full_id.is_empty() {
+            query_single_container_stats(sock_path, &full_id).await
+        } else {
+            (None, None)
+        };
+
+        containers.push(DockerContainerInfo {
+            id: short_id,
+            name: if name.is_empty() { "container".into() } else { name },
+            image: c.image.unwrap_or_default(),
+            state,
+            status: c.status.unwrap_or_default(),
+            cpu_percent: cpu,
+            ram_used_bytes: ram,
+        });
+    }
 
     (true, containers)
+}
+
+async fn query_single_container_stats(sock_path: &Path, id: &str) -> (Option<f64>, Option<u64>) {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    use tokio::net::UnixStream;
+
+    let Ok(mut stream) = UnixStream::connect(sock_path).await else {
+        return (None, None);
+    };
+
+    let request = format!(
+        "GET /containers/{}/stats?stream=false HTTP/1.0\r\nHost: docker\r\nConnection: close\r\n\r\n",
+        id
+    );
+    if stream.write_all(request.as_bytes()).await.is_err() {
+        return (None, None);
+    }
+
+    let mut response_bytes = Vec::new();
+    if stream.read_to_end(&mut response_bytes).await.is_err() {
+        return (None, None);
+    }
+
+    let mut body_start = 0;
+    for i in 0..response_bytes.len().saturating_sub(3) {
+        if &response_bytes[i..i + 4] == b"\r\n\r\n" {
+            body_start = i + 4;
+            break;
+        }
+    }
+    if body_start == 0 || body_start >= response_bytes.len() {
+        return (None, None);
+    }
+
+    let body = &response_bytes[body_start..];
+
+    #[derive(Deserialize)]
+    struct RawStats {
+        cpu_stats: Option<RawCpuStats>,
+        precpu_stats: Option<RawCpuStats>,
+        memory_stats: Option<RawMemStats>,
+    }
+    #[derive(Deserialize)]
+    struct RawCpuStats {
+        cpu_usage: Option<RawCpuUsage>,
+        system_cpu_usage: Option<u64>,
+        online_cpus: Option<u32>,
+    }
+    #[derive(Deserialize)]
+    struct RawCpuUsage {
+        total_usage: Option<u64>,
+    }
+    #[derive(Deserialize)]
+    struct RawMemStats {
+        usage: Option<u64>,
+        stats: Option<RawMemInnerStats>,
+    }
+    #[derive(Deserialize)]
+    struct RawMemInnerStats {
+        cache: Option<u64>,
+        inactive_file: Option<u64>,
+    }
+
+    let Ok(stats): Result<RawStats, _> = serde_json::from_slice(body) else {
+        return (None, None);
+    };
+
+    // 1. Calculate CPU Percent
+    let cpu_percent = (|| {
+        let cur_cpu = stats.cpu_stats.as_ref()?;
+        let pre_cpu = stats.precpu_stats.as_ref()?;
+        let cur_total = cur_cpu.cpu_usage.as_ref()?.total_usage?;
+        let pre_total = pre_cpu.cpu_usage.as_ref()?.total_usage?;
+        let cur_sys = cur_cpu.system_cpu_usage?;
+        let pre_sys = pre_cpu.system_cpu_usage?;
+
+        let cpu_delta = cur_total.saturating_sub(pre_total);
+        let sys_delta = cur_sys.saturating_sub(pre_sys);
+        let cpus = cur_cpu.online_cpus.unwrap_or(1).max(1);
+
+        if sys_delta > 0 && cpu_delta > 0 {
+            let pct = (cpu_delta as f64 / sys_delta as f64) * (cpus as f64) * 100.0;
+            Some((pct.clamp(0.0, 100.0 * cpus as f64) * 10.0).round() / 10.0)
+        } else {
+            Some(0.0)
+        }
+    })();
+
+    // 2. Calculate RAM Used Bytes
+    let ram_used = (|| {
+        let mem = stats.memory_stats.as_ref()?;
+        let usage = mem.usage?;
+        let cache = mem.stats.as_ref().and_then(|s| s.inactive_file.or(s.cache)).unwrap_or(0);
+        Some(usage.saturating_sub(cache))
+    })();
+
+    (cpu_percent, ram_used)
 }

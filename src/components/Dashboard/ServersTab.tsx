@@ -33,9 +33,33 @@ const DEMO_SNAPSHOT: Omit<ServerSnapshot, 'serverId' | 'updatedAt'> = {
   uptimeSeconds: 12 * 86400 + 3 * 3600 + 120,
   dockerAvailable: true,
   docker: [
-    { id: '3f9a1c2b7d', name: 'nginx-proxy', image: 'nginx:1.27-alpine', state: 'running', status: 'Up 12 days' },
-    { id: '8b21e4c9a0', name: 'postgres-1', image: 'postgres:16', state: 'running', status: 'Up 12 days (healthy)' },
-    { id: 'c4d8f0a1b2', name: 'worker', image: 'ghcr.io/acme/worker:2.4.1', state: 'exited', status: 'Exited (0) 2 hours ago' },
+    {
+      id: '3f9a1c2b7d',
+      name: 'nginx-proxy',
+      image: 'nginx:1.27-alpine',
+      state: 'running',
+      status: 'Up 12 days',
+      cpuPercent: 0.4,
+      ramUsedBytes: 28 * 1024 * 1024,
+    },
+    {
+      id: '8b21e4c9a0',
+      name: 'postgres-1',
+      image: 'postgres:16',
+      state: 'running',
+      status: 'Up 12 days (healthy)',
+      cpuPercent: 1.8,
+      ramUsedBytes: 210 * 1024 * 1024,
+    },
+    {
+      id: 'c4d8f0a1b2',
+      name: 'worker',
+      image: 'ghcr.io/acme/worker:2.4.1',
+      state: 'exited',
+      status: 'Exited (0) 2 hours ago',
+      cpuPercent: 0,
+      ramUsedBytes: 0,
+    },
   ],
   latencyMs: 42,
 };
@@ -962,32 +986,55 @@ export const ServersTab: React.FC = () => {
                         Tidak ada container.
                       </p>
                     ) : (
-                      snapshot.docker.map((container) => (
-                        <div
-                          key={container.id}
-                          className="flex items-center gap-2 rounded-lg bg-white/[0.03] px-2 py-1"
-                          title={container.status}
-                        >
-                          <span
-                            className={`h-1.5 w-1.5 shrink-0 rounded-full ${
-                              container.state === 'running'
-                                ? 'bg-emerald-400'
-                                : container.state === 'paused'
-                                  ? 'bg-amber-400'
-                                  : 'bg-neutral-500'
-                            }`}
-                          />
-                          <span className="min-w-0 flex-1 truncate text-[10px] font-medium text-white/85">
-                            {container.name}
-                          </span>
-                          <span className="hidden min-w-0 max-w-[120px] truncate text-[8.5px] text-neutral-500 sm:block">
-                            {container.image}
-                          </span>
-                          <span className="shrink-0 text-[8.5px] capitalize text-neutral-400">
-                            {container.state}
-                          </span>
-                        </div>
-                      ))
+                      snapshot.docker.map((container) => {
+                        const hasMetrics =
+                          container.state === 'running' &&
+                          (container.cpuPercent !== undefined || container.ramUsedBytes !== undefined);
+
+                        return (
+                          <div
+                            key={container.id}
+                            className="flex items-center gap-2 rounded-lg bg-white/[0.03] px-2 py-1.5 transition-colors hover:bg-white/[0.06]"
+                            title={`${container.name} (${container.image}) · ${container.status}`}
+                          >
+                            <span
+                              className={`h-1.5 w-1.5 shrink-0 rounded-full ${
+                                container.state === 'running'
+                                  ? 'bg-emerald-400'
+                                  : container.state === 'paused'
+                                    ? 'bg-amber-400'
+                                    : 'bg-neutral-500'
+                              }`}
+                            />
+                            <span className="min-w-0 flex-1 truncate text-[10px] font-medium text-white/90">
+                              {container.name}
+                            </span>
+
+                            {hasMetrics ? (
+                              <div className="flex shrink-0 items-center gap-1.5 text-[8.5px] tabular-nums">
+                                {container.cpuPercent !== undefined && container.cpuPercent !== null && (
+                                  <span className="rounded bg-sky-500/10 px-1.5 py-0.5 font-medium text-sky-400">
+                                    {container.cpuPercent.toFixed(1)}%
+                                  </span>
+                                )}
+                                {container.ramUsedBytes !== undefined && container.ramUsedBytes !== null && (
+                                  <span className="rounded bg-purple-500/10 px-1.5 py-0.5 font-medium text-purple-300">
+                                    {formatBytes(container.ramUsedBytes)}
+                                  </span>
+                                )}
+                              </div>
+                            ) : (
+                              <span className="hidden min-w-0 max-w-[110px] truncate text-[8.5px] text-neutral-500 sm:block">
+                                {container.image}
+                              </span>
+                            )}
+
+                            <span className="shrink-0 text-[8.5px] capitalize text-neutral-500">
+                              {container.state}
+                            </span>
+                          </div>
+                        );
+                      })
                     )}
                   </div>
                 </div>
