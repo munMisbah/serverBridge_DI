@@ -1,5 +1,7 @@
+mod processes;
+
 use axum::{
-    extract::State,
+    extract::{Query, State},
     http::{header, HeaderMap, StatusCode},
     response::{IntoResponse, Json},
     routing::get,
@@ -53,6 +55,7 @@ struct AppState {
     docker_cache: Arc<tokio::sync::Mutex<(u64, bool, Vec<DockerContainerInfo>)>>,
     disk_cache: Arc<tokio::sync::Mutex<(u64, u64, u64)>>,
     container_cpu_tracker: Arc<tokio::sync::Mutex<std::collections::HashMap<String, (std::time::Instant, u64)>>>,
+    process_collector: Arc<tokio::sync::Mutex<processes::ProcessCollector>>,
 }
 
 #[derive(Clone)]
@@ -181,11 +184,13 @@ async fn main() {
         docker_cache: Arc::new(tokio::sync::Mutex::new((0, false, Vec::new()))),
         disk_cache: Arc::new(tokio::sync::Mutex::new((0, 0, 0))),
         container_cpu_tracker: Arc::new(tokio::sync::Mutex::new(std::collections::HashMap::new())),
+        process_collector: Arc::new(tokio::sync::Mutex::new(processes::ProcessCollector::default())),
     };
 
     let app = Router::new()
         .route("/health", get(health_handler))
         .route("/api/stats", get(stats_handler))
+        .route("/api/processes", get(processes_handler))
         .with_state(state);
 
     let listener = tokio::net::TcpListener::bind(("0.0.0.0", port))
@@ -207,7 +212,12 @@ async fn stats_handler(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, &'static str)> {
-    // Authenticate if BRIDGE_TOKEN is configured
+    authorize(&state, &headers)?;
+    let stats = collect_host_stats(&state).await;
+    Ok(Json(stats))
+}
+
+fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), (StatusCode, &'static str)> {
     if let Some(ref required_token) = state.token {
         let auth_header = headers
             .get(header::AUTHORIZATION)
@@ -228,9 +238,25 @@ async fn stats_handler(
             return Err((StatusCode::UNAUTHORIZED, "Invalid or missing Bearer token"));
         }
     }
+    Ok(())
+}
 
-    let stats = collect_host_stats(&state).await;
-    Ok(Json(stats))
+async fn processes_handler(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<processes::ProcessQuery>,
+) -> Result<Json<processes::ProcessResponse>, (StatusCode, &'static str)> {
+    authorize(&state, &headers)?;
+    let collector = state.process_collector.lock_owned().await;
+    let paths = state.paths;
+    tokio::task::spawn_blocking(move || {
+        let mut collector = collector;
+        collector.response(&paths.proc_dir, &paths.root_dir, query)
+    })
+    .await
+    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Process collector failed"))?
+    .map(Json)
+    .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "Failed to read host processes"))
 }
 
 async fn collect_host_stats(state: &AppState) -> BridgeStatsResponse {

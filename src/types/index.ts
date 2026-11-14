@@ -106,6 +106,23 @@ export interface ServerSnapshot {
   updatedAt: number;
 }
 
+export type ProcessSort = 'cpu' | 'ram' | 'user';
+
+export interface ServerProcess {
+  pid: number;
+  name: string;
+  user: string;
+  cpuPercent: number | null;
+  ramUsedBytes: number;
+}
+
+export interface ServerProcesses {
+  processes: ServerProcess[];
+  total: number;
+  skippedProcesses: number;
+  updatedAt: number;
+}
+
 export interface TrustPrompt {
   fingerprint: string;
   keyType: string;

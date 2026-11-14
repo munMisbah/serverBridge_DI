@@ -22,3 +22,9 @@ dynamic-island-error.log
 # OS generated files
 .DS_Store
 Thumbs.db
+
+# Local binaries, scripts & internal docs (tidak untuk dipublish)
+*.exe
+*.bat
+PRD.md
+UI_HANDOFF.md

@@ -338,97 +338,74 @@ fn probe(app: AppHandle, server_id: String, session_password: Option<String>) ->
     }
 }
 
+fn bridge_request(
+    server: &crate::server_store::StoredServer,
+    session_token: Option<String>,
+    path: &str,
+) -> Result<(Vec<u8>, usize), String> {
+    use std::io::{Read, Write};
+    use std::net::TcpStream;
+
+    let mut token = if server.remember_credential {
+        crate::credentials::read_credential_for(&server.id, &server.identity())?
+    } else {
+        session_token.filter(|t| !t.is_empty())
+    };
+    let addr = format!("{}:{}", server.host, server.port);
+    let socket_addr = addr.to_socket_addrs()
+        .map_err(|e| format!("Host tidak dapat di-resolve: {}: {}", addr, e))?
+        .next()
+        .ok_or_else(|| format!("Host tidak dapat di-resolve: {}", addr))?;
+    let mut stream = TcpStream::connect_timeout(&socket_addr, Duration::from_secs(4))
+        .map_err(|e| format!("Gagal terhubung ke Bridge ({}): {}", addr, e))?;
+    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
+    let _ = stream.set_write_timeout(Some(Duration::from_secs(3)));
+    let mut request = format!(
+        "GET {} HTTP/1.0\r\nHost: {}\r\nUser-Agent: DynamicIslandWin/1.0\r\n",
+        path, server.host
+    );
+    if let Some(secret) = token.as_deref().filter(|t| !t.trim().is_empty()) {
+        if secret.contains(['\r', '\n']) {
+            return Err("Token Bridge tidak valid".into());
+        }
+        request.push_str("Authorization: Bearer ");
+        request.push_str(secret.trim());
+        request.push_str("\r\n");
+    }
+    request.push_str("Connection: close\r\n\r\n");
+    let sent = stream.write_all(request.as_bytes());
+    request.zeroize();
+    if let Some(secret) = token.as_mut() {
+        secret.zeroize();
+    }
+    sent.map_err(|e| format!("Gagal mengirim request ke Bridge: {}", e))?;
+
+    let mut response = Vec::new();
+    stream.read_to_end(&mut response)
+        .map_err(|e| format!("Gagal membaca respons dari Bridge: {}", e))?;
+    let header_end = response.windows(4).position(|bytes| bytes == b"\r\n\r\n")
+        .map(|index| index + 4)
+        .ok_or("Format respons Bridge tidak valid")?;
+    let headers = String::from_utf8_lossy(&response[..header_end]);
+    let status = headers.lines().next().unwrap_or("").split_whitespace().nth(1);
+    match status {
+        Some("200") => {}
+        Some("401") => return Err("Token Bridge tidak valid (401 Unauthorized)".into()),
+        Some("404") => return Err("Apps Activity belum tersedia. Update image server-bridge di server.".into()),
+        _ => return Err(format!("Bridge status error: {}", headers.lines().next().unwrap_or(""))),
+    }
+    Ok((response, header_end))
+}
+
 fn probe_bridge(
     server: &crate::server_store::StoredServer,
     session_token: Option<String>,
 ) -> ProbeOutcome {
-    use std::io::{Read, Write};
-    use std::net::TcpStream;
-
     let started = Instant::now();
-    let token = if server.remember_credential {
-        match crate::credentials::read_credential_for(&server.id, &server.identity()) {
-            Ok(token) => token,
-            Err(message) => return ProbeOutcome::Error { message },
-        }
-    } else {
-        session_token.filter(|t| !t.is_empty())
+    let (body, header_end) = match bridge_request(server, session_token, "/api/stats") {
+        Ok(response) => response,
+        Err(message) => return ProbeOutcome::Error { message },
     };
-
-    let addr = format!("{}:{}", server.host, server.port);
-    let socket_addr = match addr.to_socket_addrs().ok().and_then(|mut iter| iter.next()) {
-        Some(a) => a,
-        None => {
-            return ProbeOutcome::Error {
-                message: format!("Host tidak dapat di-resolve: {}", addr),
-            }
-        }
-    };
-
-    let mut stream = match TcpStream::connect_timeout(&socket_addr, Duration::from_secs(4)) {
-        Ok(s) => s,
-        Err(e) => {
-            return ProbeOutcome::Error {
-                message: format!("Gagal terhubung ke Bridge ({}): {}", addr, e),
-            }
-        }
-    };
-
-    let _ = stream.set_read_timeout(Some(Duration::from_secs(5)));
-    let _ = stream.set_write_timeout(Some(Duration::from_secs(3)));
-
-    let auth_header = match &token {
-        Some(t) if !t.trim().is_empty() => format!("Authorization: Bearer {}\r\n", t.trim()),
-        _ => String::new(),
-    };
-
-    let request = format!(
-        "GET /api/stats HTTP/1.1\r\nHost: {}\r\nUser-Agent: DynamicIslandWin/1.0\r\n{}Connection: close\r\n\r\n",
-        server.host, auth_header
-    );
-
-    if let Err(e) = stream.write_all(request.as_bytes()) {
-        return ProbeOutcome::Error {
-            message: format!("Gagal mengirim request ke Bridge: {}", e),
-        };
-    }
-
-    let mut response_bytes = Vec::new();
-    if let Err(e) = stream.read_to_end(&mut response_bytes) {
-        return ProbeOutcome::Error {
-            message: format!("Gagal membaca respons dari Bridge: {}", e),
-        };
-    }
-
-    let mut header_end = 0;
-    for i in 0..response_bytes.len().saturating_sub(3) {
-        if &response_bytes[i..i + 4] == b"\r\n\r\n" {
-            header_end = i + 4;
-            break;
-        }
-    }
-
-    if header_end == 0 {
-        return ProbeOutcome::Error {
-            message: "Format respons Bridge tidak valid".into(),
-        };
-    }
-
-    let headers_part = String::from_utf8_lossy(&response_bytes[..header_end]);
-    let status_line = headers_part.lines().next().unwrap_or("");
-    if status_line.contains("401") {
-        return ProbeOutcome::Error {
-            message: "Token Bridge tidak valid (401 Unauthorized)".into(),
-        };
-    }
-    if !status_line.contains("200") {
-        return ProbeOutcome::Error {
-            message: format!("Bridge status error: {}", status_line),
-        };
-    }
-
-    let body = &response_bytes[header_end..];
-
     #[derive(Deserialize)]
     #[serde(rename_all = "camelCase")]
     struct BridgePayload {
@@ -443,18 +420,12 @@ fn probe_bridge(
         docker_available: bool,
         docker: Vec<DockerContainer>,
     }
-
-    let payload: BridgePayload = match serde_json::from_slice(body) {
-        Ok(p) => p,
-        Err(e) => {
-            return ProbeOutcome::Error {
-                message: format!("Gagal mem-parse JSON Bridge: {}", e),
-            }
-        }
+    let payload: BridgePayload = match serde_json::from_slice(&body[header_end..]) {
+        Ok(payload) => payload,
+        Err(e) => return ProbeOutcome::Error {
+            message: format!("Gagal mem-parse JSON Bridge: {}", e),
+        },
     };
-
-    let latency = started.elapsed().as_millis() as u64;
-
     ProbeOutcome::Ok {
         snapshot: ServerSnapshot {
             server_id: server.id.clone(),
@@ -468,10 +439,62 @@ fn probe_bridge(
             uptime_seconds: payload.uptime_seconds,
             docker_available: payload.docker_available,
             docker: payload.docker,
-            latency_ms: latency,
+            latency_ms: started.elapsed().as_millis() as u64,
             updated_at: now_ms(),
         },
     }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ProcessSort {
+    Cpu,
+    Ram,
+    User,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerProcess {
+    pid: u32,
+    name: String,
+    user: String,
+    cpu_percent: Option<f64>,
+    ram_used_bytes: u64,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ServerProcesses {
+    processes: Vec<ServerProcess>,
+    total: usize,
+    skipped_processes: usize,
+    updated_at: u64,
+}
+
+#[tauri::command]
+pub async fn server_processes(
+    app: AppHandle,
+    server_id: String,
+    password: Option<String>,
+    sort: ProcessSort,
+    descending: bool,
+) -> Result<ServerProcesses, String> {
+    tokio::task::spawn_blocking(move || {
+        let server = crate::server_store::get_server(&app, &server_id)?;
+        if server.auth_type != "bridge" {
+            return Err("Apps Activity memerlukan koneksi Bridge Agent.".into());
+        }
+        let sort = match sort {
+            ProcessSort::Cpu => "cpu",
+            ProcessSort::Ram => "ram",
+            ProcessSort::User => "user",
+        };
+        let path = format!("/api/processes?sort={}&descending={}", sort, descending);
+        let (body, header_end) = bridge_request(&server, password, &path)?;
+        serde_json::from_slice(&body[header_end..])
+            .map_err(|e| format!("Gagal mem-parse Apps Activity: {}", e))
+    }).await.map_err(|e| format!("Apps Activity task join error: {}", e))?
 }
 
 #[tauri::command]

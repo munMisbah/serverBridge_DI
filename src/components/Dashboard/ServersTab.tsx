@@ -11,6 +11,7 @@ import { SsdSquareIcon } from '@solar-icons/react/bold/ssd-square';
 import { BoxIcon } from '@solar-icons/react/bold/box';
 import { CloseCircleIcon } from '@solar-icons/react/bold/close-circle';
 import { useIsland } from '../../context/IslandContext';
+import { AppsActivity } from './AppsActivity';
 import {
   ServerAuthType,
   ServerConfig,
@@ -494,6 +495,7 @@ export const ServersTab: React.FC = () => {
     null
   );
   const [refreshToken, setRefreshToken] = useState(0);
+  const [detailView, setDetailView] = useState<'docker' | 'processes'>('docker');
   const serversRef = useRef(servers);
   serversRef.current = servers;
   const secretsRef = useRef(serverSecrets);
@@ -969,13 +971,22 @@ export const ServersTab: React.FC = () => {
 
                 <div className="mt-2 flex min-h-0 flex-1 flex-col">
                   <div className="flex shrink-0 items-center gap-1.5 pb-1 px-0.5">
-                    <BoxIcon size={11} className="text-sky-400" />
-                    <span className="text-[10px] font-semibold text-white/90">Docker</span>
-                    <span className="rounded-full bg-neutral-800 px-1.5 py-0.2 text-[8.5px] font-medium text-neutral-300">
-                      {running}/{snapshot.docker.length}
-                    </span>
+                    <button type="button" onClick={() => setDetailView('docker')}
+                      aria-pressed={detailView === 'docker'}
+                      className={`flex items-center gap-1 rounded-md px-1.5 py-1 text-[10px] font-semibold ${detailView === 'docker' ? 'bg-sky-500/15 text-sky-300' : 'text-neutral-500 hover:text-white'}`}>
+                      <BoxIcon size={11} /> Docker {running}/{snapshot.docker.length}
+                    </button>
+                    <button type="button" onClick={() => setDetailView('processes')}
+                      aria-pressed={detailView === 'processes'}
+                      className={`rounded-md px-1.5 py-1 text-[10px] font-semibold ${detailView === 'processes' ? 'bg-sky-500/15 text-sky-300' : 'text-neutral-500 hover:text-white'}`}>
+                      Apps Activity
+                    </button>
                   </div>
 
+                  {detailView === 'processes' ? (
+                    <AppsActivity key={selected.id} server={selected}
+                      password={serverSecrets[selected.id]} active={!formState} />
+                  ) : (
                   <div className="min-h-0 flex-1 space-y-1 overflow-y-auto pr-1 scrollbar-thin scrollbar-thumb-white/10 hover:scrollbar-thumb-white/20">
                     {!snapshot.dockerAvailable ? (
                       <p className="rounded-lg bg-white/[0.03] px-2 py-1.5 text-[9.5px] text-neutral-500">
@@ -1037,6 +1048,7 @@ export const ServersTab: React.FC = () => {
                       })
                     )}
                   </div>
+                  )}
                 </div>
               </>
             ) : (

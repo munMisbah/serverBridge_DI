@@ -272,6 +272,7 @@ pub fn run() {
             clipboard::clipboard_clear_image_cache,
             battery::get_battery_snapshot,
             servers::server_probe,
+            servers::server_processes,
             servers::server_confirm_host_key,
             server_store::servers_list,
             server_store::server_upsert,
