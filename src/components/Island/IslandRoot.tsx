@@ -11,16 +11,38 @@ import { CompactView } from './CompactView';
 import { NotificationView } from './NotificationView';
 import { ExpandedView } from './ExpandedView';
 import { getIslandDimensions } from './dimensions';
-import { setIslandHitRect } from '../../lib/hitTest';
+import {
+  isCollapseSuppressed,
+  setCollapseSuppressed,
+  setIslandHitRect,
+} from '../../lib/hitTest';
 import { NotesLayer } from '../Notes/NotesLayer';
+import { FloatingServersLayer } from '../Servers/FloatingServersLayer';
 
 const HOVER_EXPAND_DELAY = 30;
 const HOVER_COLLAPSE_DELAY = 120;
 const NOTCH_EAR_RADIUS = 14;
 export const IslandRoot: React.FC = () => {
-  const { state, setState, activeNotification, settings, audioPlayback, activeTab } =
-    useIsland();
+  const {
+    state,
+    setState,
+    activeNotification,
+    settings,
+    audioPlayback,
+    activeTab,
+    setActiveTab,
+    isDraggingImageFile,
+    setIsDraggingImageFile,
+  } = useIsland();
   const islandRef = useRef<HTMLDivElement>(null);
+  const htmlDragDepthRef = useRef(0);
+  const tauriImageDragRef = useRef(false);
+
+  useEffect(() => {
+    if (!isDraggingImageFile) {
+      htmlDragDepthRef.current = 0;
+    }
+  }, [isDraggingImageFile]);
 
   const hoverExpandTimer = useRef<number | undefined>(undefined);
   const hoverCollapseTimer = useRef<number | undefined>(undefined);
@@ -70,7 +92,7 @@ export const IslandRoot: React.FC = () => {
     window.clearTimeout(hoverExpandTimer.current);
     window.clearTimeout(hoverCollapseTimer.current);
     hoverCollapseTimer.current = window.setTimeout(() => {
-      if (stateRef.current !== 'expanded') {
+      if (stateRef.current !== 'expanded' || isCollapseSuppressed()) {
         return;
       }
 
@@ -207,7 +229,8 @@ export const IslandRoot: React.FC = () => {
         state === 'expanded' &&
         islandRef.current &&
         !islandRef.current.contains(e.target as Node) &&
-        !target?.closest?.('[data-notes-layer]')
+        !target?.closest?.('[data-notes-layer]') &&
+        !target?.closest?.('[data-floating-servers-layer]')
       ) {
         setState('compact');
       }
@@ -238,6 +261,124 @@ export const IslandRoot: React.FC = () => {
   }, [clearHoverTimers, settings.expandTrigger]);
 
   useEffect(() => () => clearHoverTimers(), [clearHoverTimers]);
+
+  // Auto-open Converter tab when dragging a JPG/PNG file from OS over the Island (Tauri).
+  useEffect(() => {
+    if (!isTauri) return;
+
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    const isSupportedImg = (p: string) => /\.(jpe?g|png)$/i.test(p);
+
+    const isOverIsland = (x: number, y: number): boolean => {
+      const el = islandRef.current;
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      const pad = 20;
+      return x >= r.left - pad && x <= r.right + pad && y >= 0 && y <= r.bottom + pad;
+    };
+
+    import('@tauri-apps/api/webview')
+      .then(({ getCurrentWebview }) =>
+        getCurrentWebview().onDragDropEvent((event) => {
+          if (cancelled) return;
+          const payload = event.payload;
+          const dpr = window.devicePixelRatio || 1;
+          const converterHidden = (settings.hiddenTabs ?? []).includes('converter');
+
+          if (payload.type === 'enter') {
+            const hasImage = payload.paths.some(isSupportedImg);
+            tauriImageDragRef.current = hasImage;
+            if (hasImage && !converterHidden) {
+              const x = payload.position.x / dpr;
+              const y = payload.position.y / dpr;
+              if (isOverIsland(x, y)) {
+                setCollapseSuppressed(true);
+                setIsDraggingImageFile(true);
+                setActiveTab('converter');
+                setState('expanded');
+              }
+            }
+          } else if (payload.type === 'over') {
+            if (tauriImageDragRef.current && !converterHidden) {
+              const x = payload.position.x / dpr;
+              const y = payload.position.y / dpr;
+              if (isOverIsland(x, y)) {
+                setCollapseSuppressed(true);
+                setIsDraggingImageFile(true);
+                setActiveTab('converter');
+                setState('expanded');
+              } else {
+                setIsDraggingImageFile(false);
+                setCollapseSuppressed(false);
+              }
+            }
+          } else {
+            tauriImageDragRef.current = false;
+            setIsDraggingImageFile(false);
+            setCollapseSuppressed(false);
+          }
+        })
+      )
+      .then((fn) => {
+        if (cancelled) fn();
+        else unlisten = fn;
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      tauriImageDragRef.current = false;
+      setIsDraggingImageFile(false);
+      setCollapseSuppressed(false);
+      unlisten?.();
+    };
+  }, [isTauri, settings.hiddenTabs, setActiveTab, setState, setIsDraggingImageFile]);
+
+  const isHtmlImageDrag = (dt: DataTransfer | null): boolean => {
+    if (!dt) return false;
+    if (!Array.from(dt.types ?? []).includes('Files')) return false;
+    const items = Array.from(dt.items ?? []);
+    if (items.length === 0) return true;
+    return items.some(
+      (item) =>
+        item.kind === 'file' &&
+        (item.type === '' || item.type === 'image/jpeg' || item.type === 'image/png')
+    );
+  };
+
+  const handleIslandDragEnter = (e: React.DragEvent) => {
+    if ((settings.hiddenTabs ?? []).includes('converter')) return;
+    if (!isHtmlImageDrag(e.dataTransfer)) return;
+    e.preventDefault();
+    htmlDragDepthRef.current += 1;
+    setCollapseSuppressed(true);
+    setIsDraggingImageFile(true);
+    setActiveTab('converter');
+    setState('expanded');
+  };
+
+  const handleIslandDragOver = (e: React.DragEvent) => {
+    if ((settings.hiddenTabs ?? []).includes('converter')) return;
+    if (!isHtmlImageDrag(e.dataTransfer)) return;
+    e.preventDefault();
+  };
+
+  const handleIslandDragLeave = (e: React.DragEvent) => {
+    if (htmlDragDepthRef.current <= 0) return;
+    e.preventDefault();
+    htmlDragDepthRef.current = Math.max(0, htmlDragDepthRef.current - 1);
+    if (htmlDragDepthRef.current === 0) {
+      setIsDraggingImageFile(false);
+      setCollapseSuppressed(false);
+    }
+  };
+
+  const handleIslandDrop = () => {
+    htmlDragDepthRef.current = 0;
+    setIsDraggingImageFile(false);
+    setCollapseSuppressed(false);
+  };
 
   const handleClick = () => {
     if (state === 'compact') {
@@ -301,6 +442,10 @@ export const IslandRoot: React.FC = () => {
           }}
           transition={transition}
           onClick={handleClick}
+          onDragEnter={handleIslandDragEnter}
+          onDragOver={handleIslandDragOver}
+          onDragLeave={handleIslandDragLeave}
+          onDrop={handleIslandDrop}
           onPointerEnter={
             isTauri ? undefined : () => handleHoverChange(true)
           }
@@ -397,8 +542,9 @@ export const IslandRoot: React.FC = () => {
         </motion.div>
       </div>
 
-      {/* Floating sticky notes (rendered above the island, outside its clip) */}
+      {/* Floating sticky notes & detached server cards (rendered above the island, outside its clip) */}
       <NotesLayer />
+      <FloatingServersLayer />
     </>
   );
 };

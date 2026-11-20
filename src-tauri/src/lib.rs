@@ -1,5 +1,6 @@
 pub mod battery;
 pub mod clipboard;
+pub mod converter;
 pub mod credentials;
 pub mod server_store;
 pub mod servers;
@@ -278,6 +279,12 @@ pub fn run() {
             server_store::server_upsert,
             server_store::server_delete,
             server_store::server_credential_save,
+            converter::convert_image_path,
+            converter::convert_image_bytes,
+            converter::reveal_file_in_explorer,
+            converter::get_default_converter_dir,
+            converter::pick_converter_output_dir,
+            converter::open_converter_output_dir,
         ])
         .run(tauri::generate_context!());
 
