@@ -594,8 +594,10 @@ export const ServersTab: React.FC = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', cleanup);
       window.removeEventListener('pointercancel', cleanup);
+      window.removeEventListener('blur', cleanup);
       dragCleanupRef.current = null;
       if (dragging) {
+        dragging = false;
         setHitTestForce(false);
         setCollapseSuppressed(false);
       }
@@ -625,10 +627,18 @@ export const ServersTab: React.FC = () => {
         if (!outsideIsland) return;
 
         detached = true;
-        detachServer(serverId, {
+        const pos = {
           x: Math.round(ev.clientX - 210),
           y: Math.max(16, Math.round(ev.clientY - 22)),
-        });
+        };
+        if (isTauri) {
+          // Release hit-test force BEFORE spawning the native window so desktop
+          // click-through is restored immediately when the new window takes focus.
+          cleanup();
+          detachServer(serverId, pos);
+          return;
+        }
+        detachServer(serverId, pos);
       } else {
         const vw = window.innerWidth || 1280;
         const vh = window.innerHeight || 800;
@@ -643,6 +653,7 @@ export const ServersTab: React.FC = () => {
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', cleanup);
     window.addEventListener('pointercancel', cleanup);
+    window.addEventListener('blur', cleanup);
   };
   const snapshot = selected ? snapshots[selected.id] : undefined;
   const error = selected ? errors[selected.id] : undefined;

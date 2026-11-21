@@ -1,4 +1,4 @@
-import { CompactSlotType, MediaSlotPlacement } from '../../types';
+import { CompactSlotType, MediaSlotPlacement, SettingsBackdrop } from '../../types';
 import React, { useEffect, useState } from 'react';
 import { TuningIcon } from '@solar-icons/react/bold/tuning';
 import { LayersMinimalisticIcon } from '@solar-icons/react/bold/layers-minimalistic';
@@ -97,13 +97,31 @@ export const SettingsWindow: React.FC = () => {
 
   const opacityPercent = settings.backgroundOpacity ?? 85;
   const blurPx = settings.backgroundBlur ?? 20;
+  const activeBackdrop: SettingsBackdrop = settings.settingsBackdrop ?? 'mica';
+  const useNativeBackdrop = isTauri && activeBackdrop !== 'solid';
+
+  // Apply Windows 11 native DWM backdrop (Mica / Acrylic / Tabbed / Solid) live
+  useEffect(() => {
+    if (!isTauri) return;
+    import('@tauri-apps/api/core')
+      .then(({ invoke }) => invoke('set_settings_backdrop', { backdrop: activeBackdrop }))
+      .catch((err) => console.debug('Backdrop DWM skipped:', err));
+  }, [isTauri, activeBackdrop]);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-[#0c0d12] text-white select-none rounded-[24px] shadow-[0_16px_40px_rgba(0,0,0,0.7)]">
+    <div
+      className={`flex h-screen w-screen flex-col overflow-hidden text-white select-none ${
+        useNativeBackdrop
+          ? 'bg-transparent'
+          : 'bg-[#0c0d12] rounded-[24px] shadow-[0_16px_40px_rgba(0,0,0,0.7)]'
+      }`}
+    >
       {/* Native macOS-Style Draggable Titlebar */}
       <div
         data-tauri-drag-region
-        className="flex h-11 shrink-0 items-center justify-between px-4 bg-neutral-900/70 cursor-move"
+        className={`flex h-11 shrink-0 items-center justify-between px-4 cursor-move ${
+          useNativeBackdrop ? 'bg-black/20 border-b border-white/[0.07]' : 'bg-neutral-900/70'
+        }`}
       >
         {/* macOS Traffic Light Buttons */}
         <div
@@ -161,10 +179,16 @@ export const SettingsWindow: React.FC = () => {
         <div className="w-14" />
       </div>
 
-      {/* Main Solid Settings Body (No borderlines, 100% solid surfaces) */}
+      {/* Main Settings Body */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
         {/* 1. Island Style (Pill vs Notch) */}
-        <div className="rounded-2xl bg-neutral-900/90 p-3.5 shadow-sm space-y-2">
+        <div
+          className={`rounded-2xl p-3.5 shadow-sm space-y-2 ${
+            useNativeBackdrop
+              ? 'bg-black/25 ring-1 ring-white/[0.08]'
+              : 'bg-neutral-900/90'
+          }`}
+        >
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
               <LayersMinimalisticIcon size={14} className="text-sky-400" />
@@ -201,8 +225,56 @@ export const SettingsWindow: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Native Windows 11 Backdrop (Mica / Acrylic / Tabbed / Solid) */}
+        <div
+          className={`rounded-2xl p-3.5 shadow-sm space-y-2 ${
+            useNativeBackdrop
+              ? 'bg-black/25 ring-1 ring-white/[0.08]'
+              : 'bg-neutral-900/90'
+          }`}
+        >
+          <div className="flex items-center justify-between">
+            <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
+              <StarsIcon size={14} className="text-sky-400" />
+              Settings Backdrop (Win11 DWM)
+            </span>
+            <span className="rounded-full bg-white/[0.06] px-2 py-0.5 text-[9px] font-semibold uppercase text-neutral-300">
+              {activeBackdrop}
+            </span>
+          </div>
+          <div className="grid grid-cols-4 gap-1.5">
+            {(
+              [
+                { id: 'mica', label: 'Mica' },
+                { id: 'acrylic', label: 'Acrylic' },
+                { id: 'tabbed', label: 'Tabbed' },
+                { id: 'solid', label: 'Solid' },
+              ] as { id: SettingsBackdrop; label: string }[]
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                onClick={() => updateSettings({ settingsBackdrop: opt.id })}
+                className={`rounded-xl py-2 text-[11px] font-medium transition-all ${
+                  activeBackdrop === opt.id
+                    ? 'bg-sky-500 text-white font-semibold shadow-md'
+                    : 'bg-white/[0.05] text-neutral-400 hover:bg-white/[0.1] hover:text-white'
+                }`}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
         {/* Slot Kustomisasi Kapsul (Left & Right Wings) */}
-        <div className="rounded-2xl bg-neutral-900/90 p-3.5 shadow-sm space-y-3">
+        <div
+          className={`rounded-2xl p-3.5 shadow-sm space-y-3 ${
+            useNativeBackdrop
+              ? 'bg-black/25 ring-1 ring-white/[0.08]'
+              : 'bg-neutral-900/90'
+          }`}
+        >
           <div className="flex items-center justify-between">
             <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
               <TuningIcon size={14} className="text-emerald-400" />
@@ -321,7 +393,7 @@ export const SettingsWindow: React.FC = () => {
 
 
         {/* 2. Interaction Mode */}
-        <div className="rounded-2xl bg-neutral-900/90 p-3.5 shadow-sm space-y-2">
+        <div className={`rounded-2xl p-3.5 shadow-sm space-y-2 ${useNativeBackdrop ? 'bg-black/25 ring-1 ring-white/[0.08]' : 'bg-neutral-900/90'}`}>
           <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-neutral-400">
             <CursorIcon size={14} className="text-violet-400" />
             Mode Interaksi

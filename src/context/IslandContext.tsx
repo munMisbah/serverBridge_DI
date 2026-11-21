@@ -120,6 +120,7 @@ const DEFAULT_SETTINGS: UserSettings = {
   tabOrder: ALL_TABS,
   hiddenTabs: [],
   converterOutputDir: null,
+  settingsBackdrop: 'acrylic',
 };
 const DEFAULT_EVENTS: CalendarEvent[] = [
   {
@@ -1163,55 +1164,69 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
   }, []);
 
-  const detachServer = useCallback((serverId: string, pos?: { x: number; y: number }) => {
-    setFloatingServers((prev) => {
-      const maxZ = prev.reduce((max, item) => Math.max(max, item.z), 10);
-      const existing = prev.find((item) => item.serverId === serverId);
-      if (existing) {
-        return prev.map((item) =>
-          item.serverId === serverId
-            ? {
-                ...item,
-                x: pos ? pos.x : item.x,
-                y: pos ? pos.y : item.y,
-                z: maxZ + 1,
-              }
-            : item
-        );
+  const detachServer = useCallback(
+    (serverId: string, pos?: { x: number; y: number }) => {
+      if (isTauriRuntime) {
+        const srv = serversRef.current.find((s) => s.id === serverId);
+        void invoke('open_floating_server_window', {
+          serverId,
+          title: srv?.name ?? null,
+          x: pos ? pos.x : null,
+          y: pos ? pos.y : null,
+          backdrop: settingsRef.current.settingsBackdrop ?? 'acrylic',
+        }).catch((err) => console.error('Failed to open native floating server window:', err));
       }
 
-      const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
-      const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
-      const offset = (prev.length % 5) * 28;
-      const defaultX = Math.max(
-        16,
-        Math.min(Math.round(vw / 2) + 80 + offset, vw - DEFAULT_FLOATING_SERVER_WIDTH - 16)
-      );
-      const defaultY = Math.max(
-        80,
-        Math.min(140 + offset, vh - DEFAULT_FLOATING_SERVER_HEIGHT - 16)
-      );
+      setFloatingServers((prev) => {
+        const maxZ = prev.reduce((max, item) => Math.max(max, item.z), 10);
+        const existing = prev.find((item) => item.serverId === serverId);
+        if (existing) {
+          return prev.map((item) =>
+            item.serverId === serverId
+              ? {
+                  ...item,
+                  x: pos ? pos.x : item.x,
+                  y: pos ? pos.y : item.y,
+                  z: maxZ + 1,
+                }
+              : item
+          );
+        }
 
-      const x = pos
-        ? Math.max(8, Math.min(pos.x, vw - DEFAULT_FLOATING_SERVER_WIDTH - 8))
-        : defaultX;
-      const y = pos
-        ? Math.max(8, Math.min(pos.y, vh - DEFAULT_FLOATING_SERVER_HEIGHT - 8))
-        : defaultY;
+        const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
+        const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+        const offset = (prev.length % 5) * 28;
+        const defaultX = Math.max(
+          16,
+          Math.min(Math.round(vw / 2) + 80 + offset, vw - DEFAULT_FLOATING_SERVER_WIDTH - 16)
+        );
+        const defaultY = Math.max(
+          80,
+          Math.min(140 + offset, vh - DEFAULT_FLOATING_SERVER_HEIGHT - 16)
+        );
 
-      return [
-        ...prev,
-        {
-          serverId,
-          x,
-          y,
-          width: DEFAULT_FLOATING_SERVER_WIDTH,
-          height: DEFAULT_FLOATING_SERVER_HEIGHT,
-          z: maxZ + 1,
-        },
-      ];
-    });
-  }, []);
+        const x = pos
+          ? Math.max(8, Math.min(pos.x, vw - DEFAULT_FLOATING_SERVER_WIDTH - 8))
+          : defaultX;
+        const y = pos
+          ? Math.max(8, Math.min(pos.y, vh - DEFAULT_FLOATING_SERVER_HEIGHT - 8))
+          : defaultY;
+
+        return [
+          ...prev,
+          {
+            serverId,
+            x,
+            y,
+            width: DEFAULT_FLOATING_SERVER_WIDTH,
+            height: DEFAULT_FLOATING_SERVER_HEIGHT,
+            z: maxZ + 1,
+          },
+        ];
+      });
+    },
+    [isTauriRuntime]
+  );
 
   const updateFloatingServer = useCallback(
     (serverId: string, patch: Partial<FloatingServerWindow>) => {
@@ -1222,20 +1237,93 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     []
   );
 
-  const dockServer = useCallback((serverId: string) => {
-    setFloatingServers((prev) => prev.filter((item) => item.serverId !== serverId));
-  }, []);
+  const dockServer = useCallback(
+    (serverId: string) => {
+      if (isTauriRuntime) {
+        void invoke('close_floating_server_window', {
+          serverId,
+          focusMain: false,
+        }).catch(() => {});
+      }
+      setFloatingServers((prev) => prev.filter((item) => item.serverId !== serverId));
+    },
+    [isTauriRuntime]
+  );
 
-  const bringFloatingServerToFront = useCallback((serverId: string) => {
-    setFloatingServers((prev) => {
-      const maxZ = prev.reduce((max, item) => Math.max(max, item.z), 10);
-      const target = prev.find((item) => item.serverId === serverId);
-      if (!target || target.z === maxZ) return prev;
-      return prev.map((item) =>
-        item.serverId === serverId ? { ...item, z: maxZ + 1 } : item
-      );
-    });
-  }, []);
+  const bringFloatingServerToFront = useCallback(
+    (serverId: string) => {
+      if (isTauriRuntime) {
+        const srv = serversRef.current.find((s) => s.id === serverId);
+        void invoke('open_floating_server_window', {
+          serverId,
+          title: srv?.name ?? null,
+          x: null,
+          y: null,
+          backdrop: settingsRef.current.settingsBackdrop ?? 'acrylic',
+        }).catch(() => {});
+        return;
+      }
+      setFloatingServers((prev) => {
+        const maxZ = prev.reduce((max, item) => Math.max(max, item.z), 10);
+        const target = prev.find((item) => item.serverId === serverId);
+        if (!target || target.z === maxZ) return prev;
+        return prev.map((item) =>
+          item.serverId === serverId ? { ...item, z: maxZ + 1 } : item
+        );
+      });
+    },
+    [isTauriRuntime]
+  );
+
+  // Sync native floating server window open/close/dock events in Tauri
+  useEffect(() => {
+    if (!isTauriRuntime) return;
+    let cancelled = false;
+    const unlisteners: (() => void)[] = [];
+
+    import('@tauri-apps/api/event')
+      .then(async ({ listen }) => {
+        const u1 = await listen<{ serverId: string; floating: boolean }>(
+          'floating-server-state',
+          (event) => {
+            const { serverId, floating } = event.payload;
+            setFloatingServers((prev) => {
+              if (!floating) {
+                return prev.filter((item) => item.serverId !== serverId);
+              }
+              if (prev.some((item) => item.serverId === serverId)) return prev;
+              return [
+                ...prev,
+                {
+                  serverId,
+                  x: 120,
+                  y: 120,
+                  width: DEFAULT_FLOATING_SERVER_WIDTH,
+                  height: DEFAULT_FLOATING_SERVER_HEIGHT,
+                  z: 20,
+                },
+              ];
+            });
+          }
+        );
+        const u2 = await listen<string>('dock-server-focus', () => {
+          setActiveTab('servers');
+          setState('expanded');
+        });
+        if (cancelled) {
+          u1();
+          u2();
+        } else {
+          unlisteners.push(u1, u2);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      unlisteners.forEach((fn) => fn());
+    };
+  }, [isTauriRuntime]);
 
   // Ensure activeTab always points to a visible tab when hiddenTabs changes.
   useEffect(() => {

@@ -5,9 +5,15 @@ import { FloatingServerCard } from './FloatingServerCard';
 
 export const FloatingServersLayer: React.FC = () => {
   const { floatingServers, servers, updateFloatingServer } = useIsland();
+  const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
 
-  // Keep cards clamped inside the viewport on resize
+  // In Tauri desktop mode, floating servers are real multi-monitor native OS windows
+  // with Windows 11 Acrylic/Mica backdrop (see NativeFloatingServerWindow.tsx).
   useEffect(() => {
+    if (isTauri) {
+      setNamedHitRects('servers', []);
+      return;
+    }
     const clampAll = () => {
       const vw = window.innerWidth;
       const vh = window.innerHeight;
@@ -21,10 +27,11 @@ export const FloatingServersLayer: React.FC = () => {
     };
     window.addEventListener('resize', clampAll);
     return () => window.removeEventListener('resize', clampAll);
-  }, [floatingServers, updateFloatingServer]);
+  }, [isTauri, floatingServers, updateFloatingServer]);
 
-  // Register floating server rects so desktop outside remains click-through
+  // Register floating server rects in browser preview mode
   useEffect(() => {
+    if (isTauri) return;
     setNamedHitRects(
       'servers',
       floatingServers.map((w) => ({
@@ -35,9 +42,9 @@ export const FloatingServersLayer: React.FC = () => {
       }))
     );
     return () => setNamedHitRects('servers', []);
-  }, [floatingServers]);
+  }, [isTauri, floatingServers]);
 
-  if (floatingServers.length === 0) return null;
+  if (isTauri || floatingServers.length === 0) return null;
 
   return (
     <div

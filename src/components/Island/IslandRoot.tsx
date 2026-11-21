@@ -14,6 +14,7 @@ import { getIslandDimensions } from './dimensions';
 import {
   isCollapseSuppressed,
   setCollapseSuppressed,
+  setHitTestForce,
   setIslandHitRect,
 } from '../../lib/hitTest';
 import { NotesLayer } from '../Notes/NotesLayer';
@@ -51,6 +52,7 @@ export const IslandRoot: React.FC = () => {
   const triggerRef = useRef(settings.expandTrigger);
   const isHoveredRef = useRef(false);
   const [isDodged, setIsDodged] = useState(false);
+  const [dockZoneActive, setDockZoneActive] = useState(false);
   const isDodgedRef = useRef(false);
   isDodgedRef.current = isDodged;
   const isTauri =
@@ -184,6 +186,28 @@ export const IslandRoot: React.FC = () => {
     };
   }, [isTauri]);
 
+  // Listen for floating server entering the top-center dock zone to pulse/highlight the Island
+  useEffect(() => {
+    if (!isTauri) return;
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    import('@tauri-apps/api/event')
+      .then(({ listen }) =>
+        listen<{ serverId: string; active: boolean }>('floating-server-dock-zone', (event) => {
+          setDockZoneActive(event.payload.active);
+        })
+      )
+      .then((fn) => {
+        if (cancelled) fn();
+        else unlisten = fn;
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      unlisten?.();
+    };
+  }, [isTauri]);
+
   // Expose global preview trigger on window for simulator testing
   useEffect(() => {
     interface WindowWithDodge {
@@ -239,6 +263,9 @@ export const IslandRoot: React.FC = () => {
     document.addEventListener('pointerdown', handlePointerDown);
 
     const handleWindowBlur = () => {
+      // Safety net: always release force-interactive on blur so click-through
+      // to desktop apps can never get stuck.
+      setHitTestForce(false);
       // If the mouse is still hovering over the island, do not collapse.
       // A blur event while mouse is inside is caused by tooltips or internal element focus shifts.
       if (isHoveredRef.current) return;
@@ -436,9 +463,10 @@ export const IslandRoot: React.FC = () => {
           data-island
           className="pointer-events-auto relative select-none text-white"
           animate={{
-            y: effectiveY,
+            y: dockZoneActive ? dimensions.top : effectiveY,
             width: dimensions.width,
             height: dimensions.height,
+            scale: dockZoneActive ? 1.04 : 1,
           }}
           transition={transition}
           onClick={handleClick}
@@ -499,9 +527,11 @@ export const IslandRoot: React.FC = () => {
             className="relative h-full w-full overflow-hidden text-white"
             style={{
               background: glassGradient,
-              border: glassBorder,
-              borderTop: glassBorderTop,
-              boxShadow: glassShadow,
+              border: dockZoneActive ? '1.5px solid rgba(56, 189, 248, 0.78)' : glassBorder,
+              borderTop: dockZoneActive ? '1.5px solid rgba(56, 189, 248, 0.9)' : glassBorderTop,
+              boxShadow: dockZoneActive
+                ? '0 0 24px rgba(56, 189, 248, 0.42), inset 0 0 14px rgba(56, 189, 248, 0.22)'
+                : glassShadow,
             }}
             animate={{
               borderRadius: dimensions.borderRadius,

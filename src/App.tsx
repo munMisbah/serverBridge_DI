@@ -1,5 +1,6 @@
 import { SettingsWindow } from './components/Settings/SettingsWindow';
 import { SettingsPopup } from './components/Settings/SettingsPopup';
+import { NativeFloatingServerWindow } from './components/Servers/NativeFloatingServerWindow';
 import { TuningIcon } from '@solar-icons/react/bold/tuning';
 import React, { useState } from 'react';
 import { IslandProvider, useIsland } from './context/IslandContext';
@@ -378,6 +379,18 @@ export const AppContent: React.FC = () => {
 };
 
 export default function App() {
+  const params =
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
+  const floatingServerId = params?.get('floating-server');
+
+  if (floatingServerId) {
+    return (
+      <IslandProvider>
+        <NativeFloatingServerWindow serverId={floatingServerId} />
+      </IslandProvider>
+    );
+  }
+
   const isSettingsWindow =
     typeof window !== 'undefined' &&
     (window.location.hash === '#settings' || window.location.search.includes('settings'));

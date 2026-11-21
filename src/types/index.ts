@@ -21,6 +21,8 @@ export type ActiveTab =
 
 export type ImageConvertFormat = 'webp' | 'jpg' | 'png' | 'avif';
 
+export type SettingsBackdrop = 'mica' | 'acrylic' | 'tabbed' | 'solid';
+
 export interface FloatingServerWindow {
   serverId: string;
   x: number;
@@ -249,6 +251,7 @@ export interface UserSettings {
   tabOrder?: ActiveTab[];
   hiddenTabs?: ActiveTab[];
   converterOutputDir?: string | null;
+  settingsBackdrop?: SettingsBackdrop;
 }
 
 export interface AudioPlaybackState {
