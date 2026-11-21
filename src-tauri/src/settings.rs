@@ -371,7 +371,7 @@ pub async fn open_floating_server_window(
                     return;
                 };
 
-                // If dropped at the top-center Dynamic Island dock zone, auto-dock back!
+                // If dropped at the top-center Dynamic Island dock zone, trigger Genie suck-up animation then close!
                 if is_window_in_dock_zone(&w) {
                     dock_ref.store(false, std::sync::atomic::Ordering::SeqCst);
                     let _ = app_inner.emit(
@@ -381,6 +381,9 @@ pub async fn open_floating_server_window(
                             active: false,
                         },
                     );
+                    let _ = apply_windows_backdrop(&w, "solid");
+                    let _ = app_inner.emit("floating-server-docking", sid_inner.clone());
+                    tokio::time::sleep(std::time::Duration::from_millis(220)).await;
                     let _ = w.close();
                     let _ = app_inner.emit(
                         "floating-server-state",
@@ -441,6 +444,218 @@ pub fn set_floating_server_always_on_top(
         .ok_or_else(|| "Floating server window not found".to_string())?;
     win.set_always_on_top(enabled)
         .map_err(|e| format!("Failed to set always on top: {}", e))
+}
+
+fn note_window_label(note_id: &str) -> String {
+    let clean: String = note_id
+        .chars()
+        .map(|c| if c.is_ascii_alphanumeric() || c == '-' || c == '_' { c } else { '_' })
+        .collect();
+    format!("note-{}", clean)
+}
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FloatingNoteDockZoneEvent {
+    note_id: String,
+    active: bool,
+}
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FloatingNoteClosedEvent {
+    note_id: String,
+    focus_main: bool,
+}
+
+#[tauri::command]
+pub async fn open_floating_note_window(
+    app: tauri::AppHandle,
+    note_id: String,
+    width: Option<f64>,
+    height: Option<f64>,
+    x: Option<f64>,
+    y: Option<f64>,
+    dark_glass: Option<bool>,
+) -> Result<(), String> {
+    let label = note_window_label(&note_id);
+    if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.unminimize();
+        let _ = win.show();
+        let _ = win.set_focus();
+        return Ok(());
+    }
+
+    let url = format!("index.html?floating-note={}", note_id);
+    let w = width.unwrap_or(248.0).max(190.0);
+    let h = height.unwrap_or(210.0).max(160.0);
+
+    let mut builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url.into()))
+        .title("Sticky Note")
+        .inner_size(w, h)
+        .min_inner_size(190.0, 160.0)
+        .resizable(true)
+        .maximizable(false)
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .shadow(true)
+        .visible(false);
+
+    if let (Some(px), Some(py)) = (x, y) {
+        if px >= 0.0 && py >= 0.0 {
+            builder = builder.position(px, py);
+        } else {
+            builder = builder.center();
+        }
+    } else {
+        builder = builder.center();
+    }
+
+    let win = builder
+        .build()
+        .map_err(|e| format!("Failed to create floating note window: {}", e))?;
+
+    let _ = win.show();
+    let _ = win.set_focus();
+    let backdrop = if dark_glass.unwrap_or(false) { "acrylic" } else { "solid" };
+    let _ = apply_windows_backdrop(&win, backdrop);
+
+    let app_clone = app.clone();
+    let nid_clone = note_id.clone();
+    let label_clone = label.clone();
+    let move_seq = std::sync::Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let dock_zone_state = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
+
+    win.on_window_event(move |event| match event {
+        WindowEvent::Destroyed => {
+            if dock_zone_state.swap(false, std::sync::atomic::Ordering::SeqCst) {
+                let _ = app_clone.emit(
+                    "floating-note-dock-zone",
+                    FloatingNoteDockZoneEvent {
+                        note_id: nid_clone.clone(),
+                        active: false,
+                    },
+                );
+            }
+            let _ = app_clone.emit(
+                "floating-note-closed",
+                FloatingNoteClosedEvent {
+                    note_id: nid_clone.clone(),
+                    focus_main: false,
+                },
+            );
+        }
+        WindowEvent::Moved(_) => {
+            if let Some(w) = app_clone.get_webview_window(&label_clone) {
+                let in_zone = is_window_in_dock_zone(&w);
+                let prev = dock_zone_state.swap(in_zone, std::sync::atomic::Ordering::SeqCst);
+                if prev != in_zone {
+                    let _ = app_clone.emit(
+                        "floating-note-dock-zone",
+                        FloatingNoteDockZoneEvent {
+                            note_id: nid_clone.clone(),
+                            active: in_zone,
+                        },
+                    );
+                }
+            }
+
+            let seq = move_seq.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+            let seq_ref = move_seq.clone();
+            let dock_ref = dock_zone_state.clone();
+            let app_inner = app_clone.clone();
+            let nid_inner = nid_clone.clone();
+            let lbl_inner = label_clone.clone();
+
+            tauri::async_runtime::spawn(async move {
+                for _ in 0..20 {
+                    tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+                    if seq_ref.load(std::sync::atomic::Ordering::SeqCst) != seq {
+                        return;
+                    }
+                    #[cfg(target_os = "windows")]
+                    let mouse_down = unsafe {
+                        use windows::Win32::UI::Input::KeyboardAndMouse::{
+                            GetAsyncKeyState, VK_LBUTTON,
+                        };
+                        (GetAsyncKeyState(VK_LBUTTON.0 as i32) as u16 & 0x8000) != 0
+                    };
+                    #[cfg(not(target_os = "windows"))]
+                    let mouse_down = false;
+
+                    if !mouse_down {
+                        break;
+                    }
+                }
+
+                if seq_ref.load(std::sync::atomic::Ordering::SeqCst) != seq {
+                    return;
+                }
+
+                let Some(w) = app_inner.get_webview_window(&lbl_inner) else {
+                    return;
+                };
+
+                if is_window_in_dock_zone(&w) {
+                    dock_ref.store(false, std::sync::atomic::Ordering::SeqCst);
+                    let _ = app_inner.emit(
+                        "floating-note-dock-zone",
+                        FloatingNoteDockZoneEvent {
+                            note_id: nid_inner.clone(),
+                            active: false,
+                        },
+                    );
+                    let _ = apply_windows_backdrop(&w, "solid");
+                    let _ = app_inner.emit("floating-note-docking", nid_inner.clone());
+                    tokio::time::sleep(std::time::Duration::from_millis(220)).await;
+                    let _ = w.close();
+                    let _ = app_inner.emit(
+                        "floating-note-closed",
+                        FloatingNoteClosedEvent {
+                            note_id: nid_inner,
+                            focus_main: true,
+                        },
+                    );
+                }
+            });
+        }
+        _ => {}
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn close_floating_note_window(
+    app: tauri::AppHandle,
+    note_id: String,
+    focus_main: Option<bool>,
+) -> Result<(), String> {
+    let label = note_window_label(&note_id);
+    if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.close();
+    }
+    let _ = app.emit(
+        "floating-note-closed",
+        FloatingNoteClosedEvent {
+            note_id,
+            focus_main: focus_main.unwrap_or(false),
+        },
+    );
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_floating_notes_style(app: tauri::AppHandle, dark_glass: bool) -> Result<(), String> {
+    let backdrop = if dark_glass { "acrylic" } else { "solid" };
+    for (label, win) in app.webview_windows() {
+        if label.starts_with("note-") {
+            let _ = apply_windows_backdrop(&win, backdrop);
+        }
+    }
+    Ok(())
 }
 
 #[tauri::command]

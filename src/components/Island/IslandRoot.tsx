@@ -186,25 +186,36 @@ export const IslandRoot: React.FC = () => {
     };
   }, [isTauri]);
 
-  // Listen for floating server entering the top-center dock zone to pulse/highlight the Island
+  // Listen for floating server OR floating note entering the top-center dock zone to pulse/highlight the Island
   useEffect(() => {
     if (!isTauri) return;
     let cancelled = false;
-    let unlisten: (() => void) | undefined;
+    const unlisteners: (() => void)[] = [];
     import('@tauri-apps/api/event')
-      .then(({ listen }) =>
-        listen<{ serverId: string; active: boolean }>('floating-server-dock-zone', (event) => {
-          setDockZoneActive(event.payload.active);
-        })
-      )
-      .then((fn) => {
-        if (cancelled) fn();
-        else unlisten = fn;
+      .then(async ({ listen }) => {
+        const u1 = await listen<{ serverId: string; active: boolean }>(
+          'floating-server-dock-zone',
+          (event) => {
+            setDockZoneActive(event.payload.active);
+          }
+        );
+        const u2 = await listen<{ noteId: string; active: boolean }>(
+          'floating-note-dock-zone',
+          (event) => {
+            setDockZoneActive(event.payload.active);
+          }
+        );
+        if (cancelled) {
+          u1();
+          u2();
+        } else {
+          unlisteners.push(u1, u2);
+        }
       })
       .catch(() => {});
     return () => {
       cancelled = true;
-      unlisten?.();
+      unlisteners.forEach((fn) => fn());
     };
   }, [isTauri]);
 

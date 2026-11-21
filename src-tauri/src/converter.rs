@@ -78,9 +78,24 @@ fn encode_image(img: &DynamicImage, format: &str, quality: u8) -> Result<Vec<u8>
                 .map_err(|e| format!("Gagal encode PNG: {}", e))?;
         }
         "webp" => {
-            let mut cursor = Cursor::new(&mut out);
-            img.write_to(&mut cursor, ImageFormat::WebP)
-                .map_err(|e| format!("Gagal encode WebP: {}", e))?;
+            let encoded_mem = if img.color().has_alpha() {
+                let rgba = img.to_rgba8();
+                let encoder = webp::Encoder::from_rgba(rgba.as_raw(), rgba.width(), rgba.height());
+                if q >= 100 {
+                    encoder.encode_lossless()
+                } else {
+                    encoder.encode(q as f32)
+                }
+            } else {
+                let rgb = img.to_rgb8();
+                let encoder = webp::Encoder::from_rgb(rgb.as_raw(), rgb.width(), rgb.height());
+                if q >= 100 {
+                    encoder.encode_lossless()
+                } else {
+                    encoder.encode(q as f32)
+                }
+            };
+            out.extend_from_slice(&encoded_mem);
         }
         "avif" => {
             let rgba = img.to_rgba8();

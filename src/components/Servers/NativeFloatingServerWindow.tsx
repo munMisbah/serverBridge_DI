@@ -45,27 +45,39 @@ export const NativeFloatingServerWindow: React.FC<NativeFloatingServerWindowProp
   const [detailView, setDetailView] = useState<'docker' | 'processes'>('docker');
   const [alwaysOnTop, setAlwaysOnTop] = useState(true);
   const [inDockZone, setInDockZone] = useState(false);
+  const [isDocking, setIsDocking] = useState(false);
 
   useEffect(() => {
     if (!isTauri) return;
     let cancelled = false;
-    let unlisten: (() => void) | undefined;
+    const unlisteners: (() => void)[] = [];
     import('@tauri-apps/api/event')
-      .then(({ listen }) =>
-        listen<{ serverId: string; active: boolean }>('floating-server-dock-zone', (e) => {
-          if (e.payload.serverId === serverId) {
-            setInDockZone(e.payload.active);
+      .then(async ({ listen }) => {
+        const u1 = await listen<{ serverId: string; active: boolean }>(
+          'floating-server-dock-zone',
+          (e) => {
+            if (e.payload.serverId === serverId) {
+              setInDockZone(e.payload.active);
+            }
           }
-        })
-      )
-      .then((fn) => {
-        if (cancelled) fn();
-        else unlisten = fn;
+        );
+        const u2 = await listen<string>('floating-server-docking', (e) => {
+          if (e.payload === serverId) {
+            setInDockZone(false);
+            setIsDocking(true);
+          }
+        });
+        if (cancelled) {
+          u1();
+          u2();
+        } else {
+          unlisteners.push(u1, u2);
+        }
       })
       .catch(() => {});
     return () => {
       cancelled = true;
-      unlisten?.();
+      unlisteners.forEach((fn) => fn());
     };
   }, [isTauri, serverId]);
 
@@ -74,8 +86,11 @@ export const NativeFloatingServerWindow: React.FC<NativeFloatingServerWindowProp
   secretRef.current = serverSecrets[serverId];
 
   const handleDock = useCallback(async () => {
-    if (!isTauri) return;
+    if (!isTauri || isDocking) return;
+    setInDockZone(false);
+    setIsDocking(true);
     try {
+      await new Promise((r) => window.setTimeout(r, 210));
       await invoke('close_floating_server_window', {
         serverId,
         focusMain: true,
@@ -83,7 +98,7 @@ export const NativeFloatingServerWindow: React.FC<NativeFloatingServerWindowProp
     } catch (err) {
       console.error('Failed to dock floating server window:', err);
     }
-  }, [isTauri, serverId]);
+  }, [isTauri, isDocking, serverId]);
 
   const handleTogglePin = async () => {
     const next = !alwaysOnTop;
@@ -179,12 +194,31 @@ export const NativeFloatingServerWindow: React.FC<NativeFloatingServerWindowProp
 
   return (
     <motion.div
-      animate={{
-        scale: inDockZone ? 0.96 : 1,
-        opacity: inDockZone ? 0.84 : 1,
-      }}
-      transition={{ type: 'spring', stiffness: 420, damping: 30 }}
-      className={`relative flex h-screen w-screen flex-col overflow-hidden text-white select-none transition-shadow ${
+      initial={{ opacity: 0, scaleX: 0.65, scaleY: 0.42, y: -24 }}
+      animate={
+        isDocking
+          ? {
+              opacity: 0,
+              scaleX: 0.18,
+              scaleY: 0.06,
+              y: -52,
+              borderRadius: '28px',
+            }
+          : {
+              opacity: inDockZone ? 0.84 : 1,
+              scaleX: inDockZone ? 0.96 : 1,
+              scaleY: inDockZone ? 0.96 : 1,
+              y: 0,
+              borderRadius: '0px',
+            }
+      }
+      transition={
+        isDocking
+          ? { duration: 0.2, ease: [0.4, 0, 0.2, 1] }
+          : { type: 'spring', stiffness: 420, damping: 28, mass: 0.7 }
+      }
+      style={isDocking ? { backgroundColor: 'rgba(14, 16, 22, 0.92)' } : undefined}
+      className={`relative flex h-screen w-screen origin-top flex-col overflow-hidden text-white select-none transition-shadow ${
         useNativeBackdrop ? 'bg-transparent' : 'bg-[#0c0d12]'
       } ${inDockZone ? 'ring-2 ring-inset ring-sky-400/75' : ''}`}
     >

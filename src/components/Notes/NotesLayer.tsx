@@ -18,13 +18,57 @@ const CLOSE_ANIMATION_MS = 720;
  * click-through.
  */
 export const NotesLayer: React.FC = () => {
-  const { notes, updateNote } = useIsland();
+  const { notes, updateNote, settings } = useIsland();
+  const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
   const openNotes = useMemo(() => notes.filter((n) => !n.minimized), [notes]);
   const [layerReady] = useState(true);
   // Cards that just got minimized/deleted, kept mounted while they fly home.
   const [closingNotes, setClosingNotes] = useState<NoteItem[]>([]);
   const previousOpen = useRef<NoteItem[]>([]);
   const closeTimers = useRef<number[]>([]);
+  const nativeOpenedRef = useRef<Set<string>>(new Set());
+
+  // In Tauri desktop mode, manage open notes as native multi-monitor OS windows.
+  useEffect(() => {
+    if (!isTauri) return;
+    const currentIds = new Set(openNotes.map((n) => n.id));
+    const darkGlass = (settings.noteStyle ?? 'classic') === 'dark-glass';
+
+    import('@tauri-apps/api/core')
+      .then(({ invoke }) => {
+        // Open newly unminimized notes
+        openNotes.forEach((n, idx) => {
+          if (nativeOpenedRef.current.has(n.id)) return;
+          nativeOpenedRef.current.add(n.id);
+          const vw = window.innerWidth || 1280;
+          const offset = (idx % 6) * CASCADE_STEP;
+          const x = n.x >= 0 ? n.x : Math.round(vw / 2) + 90 + offset;
+          const y = n.y >= 0 ? n.y : 120 + offset;
+          void invoke('open_floating_note_window', {
+            noteId: n.id,
+            width: n.width,
+            height: n.height,
+            x,
+            y,
+            darkGlass,
+          }).catch(() => {
+            nativeOpenedRef.current.delete(n.id);
+          });
+        });
+
+        // Close minimized/deleted notes
+        Array.from(nativeOpenedRef.current).forEach((id) => {
+          if (!currentIds.has(id)) {
+            nativeOpenedRef.current.delete(id);
+            void invoke('close_floating_note_window', {
+              noteId: id,
+              focusMain: false,
+            }).catch(() => {});
+          }
+        });
+      })
+      .catch(() => {});
+  }, [isTauri, openNotes, settings.noteStyle]);
 
   // Track notes leaving the open set so they can animate out instead of popping.
   useEffect(() => {
@@ -94,9 +138,9 @@ export const NotesLayer: React.FC = () => {
     return () => window.removeEventListener('resize', clampAll);
   }, [layerReady, openNotes, updateNote]);
 
-  // Register note rects so the native layer only grabs clicks over them.
+  // Register note rects so the native layer only grabs clicks over them (browser/overlay mode).
   useEffect(() => {
-    if (!layerReady) {
+    if (isTauri || !layerReady) {
       setExtraHitRects([]);
       return;
     }
@@ -105,7 +149,9 @@ export const NotesLayer: React.FC = () => {
         .filter((n) => n.x >= 0 && n.y >= 0)
         .map((n) => ({ x: n.x, y: n.y, width: n.width, height: n.height }))
     );
-  }, [layerReady, openNotes]);
+  }, [isTauri, layerReady, openNotes]);
+
+  if (isTauri) return null;
 
   const openIds = new Set(openNotes.map((n) => n.id));
 

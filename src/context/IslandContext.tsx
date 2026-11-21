@@ -121,6 +121,7 @@ const DEFAULT_SETTINGS: UserSettings = {
   hiddenTabs: [],
   converterOutputDir: null,
   settingsBackdrop: 'acrylic',
+  noteStyle: 'classic',
 };
 const DEFAULT_EVENTS: CalendarEvent[] = [
   {
@@ -346,8 +347,15 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (!saved) return [];
       const parsed = JSON.parse(saved) as NoteItem[];
       if (!Array.isArray(parsed)) return [];
-      // Notes always start folded into the list so the island stays compact on launch.
-      return parsed.map((n) => ({ ...n, minimized: true }));
+      // Only the main island window folds notes on initial launch;
+      // child windows (?floating-note, ?floating-server, ?settings) must preserve exact state.
+      const isChildWindow =
+        typeof window !== 'undefined' &&
+        (window.location.search.includes('floating-note') ||
+          window.location.search.includes('floating-server') ||
+          window.location.search.includes('settings') ||
+          window.location.hash === '#settings');
+      return isChildWindow ? parsed : parsed.map((n) => ({ ...n, minimized: true }));
     } catch {
       return [];
     }
@@ -408,13 +416,18 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
   }, []);
 
-  // Listen for storage events across webview windows
+  // Listen for storage events across webview windows (settings & notes)
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'di_settings' && e.newValue) {
         try {
           const parsed = JSON.parse(e.newValue);
           setSettings((prev) => ({ ...prev, ...parsed }));
+        } catch {}
+      } else if (e.key === 'di_notes' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed)) setNotes(parsed);
         } catch {}
       }
     };
@@ -1310,11 +1323,25 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           setActiveTab('servers');
           setState('expanded');
         });
+        const u3 = await listen<{ noteId: string; focusMain: boolean }>(
+          'floating-note-closed',
+          (event) => {
+            const { noteId, focusMain } = event.payload;
+            setNotes((prev) =>
+              prev.map((n) => (n.id === noteId ? { ...n, minimized: true } : n))
+            );
+            if (focusMain) {
+              setActiveTab('todo');
+              setState('expanded');
+            }
+          }
+        );
         if (cancelled) {
           u1();
           u2();
+          u3();
         } else {
-          unlisteners.push(u1, u2);
+          unlisteners.push(u1, u2, u3);
         }
       })
       .catch(() => {});

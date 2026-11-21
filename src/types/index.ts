@@ -23,6 +23,8 @@ export type ImageConvertFormat = 'webp' | 'jpg' | 'png' | 'avif';
 
 export type SettingsBackdrop = 'mica' | 'acrylic' | 'tabbed' | 'solid';
 
+export type NoteStyle = 'classic' | 'dark-glass';
+
 export interface FloatingServerWindow {
   serverId: string;
   x: number;
@@ -252,6 +254,7 @@ export interface UserSettings {
   hiddenTabs?: ActiveTab[];
   converterOutputDir?: string | null;
   settingsBackdrop?: SettingsBackdrop;
+  noteStyle?: NoteStyle;
 }
 
 export interface AudioPlaybackState {

@@ -1,6 +1,7 @@
 import { SettingsWindow } from './components/Settings/SettingsWindow';
 import { SettingsPopup } from './components/Settings/SettingsPopup';
 import { NativeFloatingServerWindow } from './components/Servers/NativeFloatingServerWindow';
+import { NativeFloatingNoteWindow } from './components/Notes/NativeFloatingNoteWindow';
 import { TuningIcon } from '@solar-icons/react/bold/tuning';
 import React, { useState } from 'react';
 import { IslandProvider, useIsland } from './context/IslandContext';
@@ -382,11 +383,20 @@ export default function App() {
   const params =
     typeof window !== 'undefined' ? new URLSearchParams(window.location.search) : null;
   const floatingServerId = params?.get('floating-server');
+  const floatingNoteId = params?.get('floating-note');
 
   if (floatingServerId) {
     return (
       <IslandProvider>
         <NativeFloatingServerWindow serverId={floatingServerId} />
+      </IslandProvider>
+    );
+  }
+
+  if (floatingNoteId) {
+    return (
+      <IslandProvider>
+        <NativeFloatingNoteWindow noteId={floatingNoteId} />
       </IslandProvider>
     );
   }

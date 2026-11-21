@@ -1,4 +1,4 @@
-import { CompactSlotType, MediaSlotPlacement, SettingsBackdrop } from '../../types';
+import { CompactSlotType, MediaSlotPlacement, NoteStyle, SettingsBackdrop } from '../../types';
 import React, { useEffect, useState } from 'react';
 import { TuningIcon } from '@solar-icons/react/bold/tuning';
 import { LayersMinimalisticIcon } from '@solar-icons/react/bold/layers-minimalistic';
@@ -97,7 +97,8 @@ export const SettingsWindow: React.FC = () => {
 
   const opacityPercent = settings.backgroundOpacity ?? 85;
   const blurPx = settings.backgroundBlur ?? 20;
-  const activeBackdrop: SettingsBackdrop = settings.settingsBackdrop ?? 'mica';
+  const activeBackdrop: SettingsBackdrop = settings.settingsBackdrop ?? 'acrylic';
+  const activeNoteStyle: NoteStyle = settings.noteStyle ?? 'classic';
   const useNativeBackdrop = isTauri && activeBackdrop !== 'solid';
 
   // Apply Windows 11 native DWM backdrop (Mica / Acrylic / Tabbed / Solid) live
@@ -107,6 +108,16 @@ export const SettingsWindow: React.FC = () => {
       .then(({ invoke }) => invoke('set_settings_backdrop', { backdrop: activeBackdrop }))
       .catch((err) => console.debug('Backdrop DWM skipped:', err));
   }, [isTauri, activeBackdrop]);
+
+  // Sync Floating Notes style live to any open native note windows
+  useEffect(() => {
+    if (!isTauri) return;
+    import('@tauri-apps/api/core')
+      .then(({ invoke }) =>
+        invoke('set_floating_notes_style', { darkGlass: activeNoteStyle === 'dark-glass' })
+      )
+      .catch(() => {});
+  }, [isTauri, activeNoteStyle]);
 
   return (
     <div
@@ -265,6 +276,39 @@ export const SettingsWindow: React.FC = () => {
                 {opt.label}
               </button>
             ))}
+          </div>
+
+          {/* Floating Notes Visual Style (Classic Pastel vs Dark Transparent Acrylic) */}
+          <div className="pt-2 border-t border-white/[0.06] space-y-1.5">
+            <div className="flex items-center justify-between text-[10px]">
+              <span className="font-semibold uppercase tracking-[0.14em] text-neutral-400">
+                Floating Notes Style
+              </span>
+              <span className="text-[9px] text-neutral-400">
+                {activeNoteStyle === 'dark-glass' ? 'Dark Transparent' : 'Klasik Pastel'}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-1.5">
+              {(
+                [
+                  { id: 'classic', label: 'Klasik Pastel' },
+                  { id: 'dark-glass', label: 'Dark Transparent' },
+                ] as { id: NoteStyle; label: string }[]
+              ).map((opt) => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => updateSettings({ noteStyle: opt.id })}
+                  className={`rounded-xl py-2 text-[11px] font-medium transition-all ${
+                    activeNoteStyle === opt.id
+                      ? 'bg-sky-500 text-white font-semibold shadow-md'
+                      : 'bg-white/[0.05] text-neutral-400 hover:bg-white/[0.1] hover:text-white'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
         {/* Slot Kustomisasi Kapsul (Left & Right Wings) */}
