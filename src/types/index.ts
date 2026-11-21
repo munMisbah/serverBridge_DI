@@ -16,7 +16,23 @@ export type ActiveTab =
   | 'notifications'
   | 'clipboard'
   | 'battery'
-  | 'servers';
+  | 'servers'
+  | 'converter';
+
+export type ImageConvertFormat = 'webp' | 'jpg' | 'png' | 'avif';
+
+export type SettingsBackdrop = 'mica' | 'acrylic' | 'tabbed' | 'solid';
+
+export type NoteStyle = 'classic' | 'dark-glass';
+
+export interface FloatingServerWindow {
+  serverId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  z: number;
+}
 
 export interface SystemBattery {
   level: number; // 0-100
@@ -234,6 +250,11 @@ export interface UserSettings {
   compactLeftSlot: CompactSlotType;
   compactRightSlot: CompactSlotType;
   mediaPlacement: MediaSlotPlacement;
+  tabOrder?: ActiveTab[];
+  hiddenTabs?: ActiveTab[];
+  converterOutputDir?: string | null;
+  settingsBackdrop?: SettingsBackdrop;
+  noteStyle?: NoteStyle;
 }
 
 export interface AudioPlaybackState {

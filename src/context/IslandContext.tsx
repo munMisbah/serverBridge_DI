@@ -17,7 +17,23 @@ import {
   ServerConfig,
   ServerUpsertInput,
   ServerUpsertResult,
+  FloatingServerWindow,
 } from '../types';
+
+export const ALL_TABS: ActiveTab[] = [
+  'todo',
+  'all',
+  'weather',
+  'calendar',
+  'notifications',
+  'clipboard',
+  'battery',
+  'servers',
+  'converter',
+];
+
+const DEFAULT_FLOATING_SERVER_WIDTH = 420;
+const DEFAULT_FLOATING_SERVER_HEIGHT = 310;
 
 interface IslandContextType {
   state: IslandState;
@@ -73,6 +89,13 @@ interface IslandContextType {
   openAllNotes: () => void;
   minimizeAllNotes: () => void;
   bringNoteToFront: (id: string) => void;
+  floatingServers: FloatingServerWindow[];
+  detachServer: (serverId: string, pos?: { x: number; y: number }) => void;
+  updateFloatingServer: (serverId: string, patch: Partial<FloatingServerWindow>) => void;
+  dockServer: (serverId: string) => void;
+  bringFloatingServerToFront: (serverId: string) => void;
+  isDraggingImageFile: boolean;
+  setIsDraggingImageFile: React.Dispatch<React.SetStateAction<boolean>>;
 }
 
 const DEFAULT_SETTINGS: UserSettings = {
@@ -94,6 +117,11 @@ const DEFAULT_SETTINGS: UserSettings = {
   compactLeftSlot: 'weather',
   compactRightSlot: 'clock',
   mediaPlacement: 'right',
+  tabOrder: ALL_TABS,
+  hiddenTabs: [],
+  converterOutputDir: null,
+  settingsBackdrop: 'acrylic',
+  noteStyle: 'classic',
 };
 const DEFAULT_EVENTS: CalendarEvent[] = [
   {
@@ -292,7 +320,11 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   });
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<ActiveTab>('todo');
+  const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
+    const hidden = new Set(settings.hiddenTabs ?? []);
+    const order = settings.tabOrder?.length ? settings.tabOrder : ALL_TABS;
+    return order.find((t) => !hidden.has(t)) ?? ALL_TABS.find((t) => !hidden.has(t)) ?? 'todo';
+  });
   const [clipboardItems, setClipboardItems] = useState<ClipboardItem[]>(() => {
     try {
       const saved = localStorage.getItem('di_clipboard_history');
@@ -315,8 +347,15 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       if (!saved) return [];
       const parsed = JSON.parse(saved) as NoteItem[];
       if (!Array.isArray(parsed)) return [];
-      // Notes always start folded into the list so the island stays compact on launch.
-      return parsed.map((n) => ({ ...n, minimized: true }));
+      // Only the main island window folds notes on initial launch;
+      // child windows (?floating-note, ?floating-server, ?settings) must preserve exact state.
+      const isChildWindow =
+        typeof window !== 'undefined' &&
+        (window.location.search.includes('floating-note') ||
+          window.location.search.includes('floating-server') ||
+          window.location.search.includes('settings') ||
+          window.location.hash === '#settings');
+      return isChildWindow ? parsed : parsed.map((n) => ({ ...n, minimized: true }));
     } catch {
       return [];
     }
@@ -345,6 +384,8 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   // Session-only secrets. Never persisted; remembered credentials live in
   // Windows Credential Manager and are read directly by the Rust backend.
   const [serverSecrets, setServerSecrets] = useState<Record<string, string>>({});
+  const [floatingServers, setFloatingServers] = useState<FloatingServerWindow[]>([]);
+  const [isDraggingImageFile, setIsDraggingImageFile] = useState(false);
   const dismissTimerRef = useRef<number | undefined>(undefined);
   const settingsRef = useRef(settings);
   useEffect(() => {
@@ -375,13 +416,18 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     });
   }, []);
 
-  // Listen for storage events across webview windows
+  // Listen for storage events across webview windows (settings & notes)
   useEffect(() => {
     const handleStorage = (e: StorageEvent) => {
       if (e.key === 'di_settings' && e.newValue) {
         try {
           const parsed = JSON.parse(e.newValue);
           setSettings((prev) => ({ ...prev, ...parsed }));
+        } catch {}
+      } else if (e.key === 'di_notes' && e.newValue) {
+        try {
+          const parsed = JSON.parse(e.newValue);
+          if (Array.isArray(parsed)) setNotes(parsed);
         } catch {}
       }
     };
@@ -1022,6 +1068,7 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         delete next[id];
         return next;
       });
+      setFloatingServers((prev) => prev.filter((item) => item.serverId !== id));
     },
     [isTauriRuntime]
   );
@@ -1129,6 +1176,194 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return prev.map((n) => (n.id === id ? { ...n, z: maxZ + 1 } : n));
     });
   }, []);
+
+  const detachServer = useCallback(
+    (serverId: string, pos?: { x: number; y: number }) => {
+      if (isTauriRuntime) {
+        const srv = serversRef.current.find((s) => s.id === serverId);
+        void invoke('open_floating_server_window', {
+          serverId,
+          title: srv?.name ?? null,
+          x: pos ? pos.x : null,
+          y: pos ? pos.y : null,
+          backdrop: settingsRef.current.settingsBackdrop ?? 'acrylic',
+        }).catch((err) => console.error('Failed to open native floating server window:', err));
+      }
+
+      setFloatingServers((prev) => {
+        const maxZ = prev.reduce((max, item) => Math.max(max, item.z), 10);
+        const existing = prev.find((item) => item.serverId === serverId);
+        if (existing) {
+          return prev.map((item) =>
+            item.serverId === serverId
+              ? {
+                  ...item,
+                  x: pos ? pos.x : item.x,
+                  y: pos ? pos.y : item.y,
+                  z: maxZ + 1,
+                }
+              : item
+          );
+        }
+
+        const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
+        const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+        const offset = (prev.length % 5) * 28;
+        const defaultX = Math.max(
+          16,
+          Math.min(Math.round(vw / 2) + 80 + offset, vw - DEFAULT_FLOATING_SERVER_WIDTH - 16)
+        );
+        const defaultY = Math.max(
+          80,
+          Math.min(140 + offset, vh - DEFAULT_FLOATING_SERVER_HEIGHT - 16)
+        );
+
+        const x = pos
+          ? Math.max(8, Math.min(pos.x, vw - DEFAULT_FLOATING_SERVER_WIDTH - 8))
+          : defaultX;
+        const y = pos
+          ? Math.max(8, Math.min(pos.y, vh - DEFAULT_FLOATING_SERVER_HEIGHT - 8))
+          : defaultY;
+
+        return [
+          ...prev,
+          {
+            serverId,
+            x,
+            y,
+            width: DEFAULT_FLOATING_SERVER_WIDTH,
+            height: DEFAULT_FLOATING_SERVER_HEIGHT,
+            z: maxZ + 1,
+          },
+        ];
+      });
+    },
+    [isTauriRuntime]
+  );
+
+  const updateFloatingServer = useCallback(
+    (serverId: string, patch: Partial<FloatingServerWindow>) => {
+      setFloatingServers((prev) =>
+        prev.map((item) => (item.serverId === serverId ? { ...item, ...patch } : item))
+      );
+    },
+    []
+  );
+
+  const dockServer = useCallback(
+    (serverId: string) => {
+      if (isTauriRuntime) {
+        void invoke('close_floating_server_window', {
+          serverId,
+          focusMain: false,
+        }).catch(() => {});
+      }
+      setFloatingServers((prev) => prev.filter((item) => item.serverId !== serverId));
+    },
+    [isTauriRuntime]
+  );
+
+  const bringFloatingServerToFront = useCallback(
+    (serverId: string) => {
+      if (isTauriRuntime) {
+        const srv = serversRef.current.find((s) => s.id === serverId);
+        void invoke('open_floating_server_window', {
+          serverId,
+          title: srv?.name ?? null,
+          x: null,
+          y: null,
+          backdrop: settingsRef.current.settingsBackdrop ?? 'acrylic',
+        }).catch(() => {});
+        return;
+      }
+      setFloatingServers((prev) => {
+        const maxZ = prev.reduce((max, item) => Math.max(max, item.z), 10);
+        const target = prev.find((item) => item.serverId === serverId);
+        if (!target || target.z === maxZ) return prev;
+        return prev.map((item) =>
+          item.serverId === serverId ? { ...item, z: maxZ + 1 } : item
+        );
+      });
+    },
+    [isTauriRuntime]
+  );
+
+  // Sync native floating server window open/close/dock events in Tauri
+  useEffect(() => {
+    if (!isTauriRuntime) return;
+    let cancelled = false;
+    const unlisteners: (() => void)[] = [];
+
+    import('@tauri-apps/api/event')
+      .then(async ({ listen }) => {
+        const u1 = await listen<{ serverId: string; floating: boolean }>(
+          'floating-server-state',
+          (event) => {
+            const { serverId, floating } = event.payload;
+            setFloatingServers((prev) => {
+              if (!floating) {
+                return prev.filter((item) => item.serverId !== serverId);
+              }
+              if (prev.some((item) => item.serverId === serverId)) return prev;
+              return [
+                ...prev,
+                {
+                  serverId,
+                  x: 120,
+                  y: 120,
+                  width: DEFAULT_FLOATING_SERVER_WIDTH,
+                  height: DEFAULT_FLOATING_SERVER_HEIGHT,
+                  z: 20,
+                },
+              ];
+            });
+          }
+        );
+        const u2 = await listen<string>('dock-server-focus', () => {
+          setActiveTab('servers');
+          setState('expanded');
+        });
+        const u3 = await listen<{ noteId: string; focusMain: boolean }>(
+          'floating-note-closed',
+          (event) => {
+            const { noteId, focusMain } = event.payload;
+            setNotes((prev) =>
+              prev.map((n) => (n.id === noteId ? { ...n, minimized: true } : n))
+            );
+            if (focusMain) {
+              setActiveTab('todo');
+              setState('expanded');
+            }
+          }
+        );
+        if (cancelled) {
+          u1();
+          u2();
+          u3();
+        } else {
+          unlisteners.push(u1, u2, u3);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      unlisteners.forEach((fn) => fn());
+    };
+  }, [isTauriRuntime]);
+
+  // Ensure activeTab always points to a visible tab when hiddenTabs changes.
+  useEffect(() => {
+    const hidden = new Set(settings.hiddenTabs ?? []);
+    if (!hidden.has(activeTab)) return;
+    const order = settings.tabOrder?.length ? settings.tabOrder : ALL_TABS;
+    const firstVisible =
+      order.find((t) => !hidden.has(t)) ?? ALL_TABS.find((t) => !hidden.has(t));
+    if (firstVisible && firstVisible !== activeTab) {
+      setActiveTab(firstVisible);
+    }
+  }, [activeTab, settings.hiddenTabs, settings.tabOrder]);
+
   return (
     <IslandContext.Provider
       value={{
@@ -1185,6 +1420,13 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         openAllNotes,
         minimizeAllNotes,
         bringNoteToFront,
+        floatingServers,
+        detachServer,
+        updateFloatingServer,
+        dockServer,
+        bringFloatingServerToFront,
+        isDraggingImageFile,
+        setIsDraggingImageFile,
       }}
     >
       {children}

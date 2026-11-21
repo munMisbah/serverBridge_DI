@@ -44,6 +44,8 @@ export const getIslandDimensions = (
           return { width: 480, height: 232, borderRadius: '0px 0px 36px 36px', top: 0 };
         case 'servers':
           return { width: 620, height: 360, borderRadius: '0px 0px 36px 36px', top: 0 };
+        case 'converter':
+          return { width: 520, height: 268, borderRadius: '0px 0px 36px 36px', top: 0 };
         case 'notifications':
           return { width: 360, height: 215, borderRadius: '0px 0px 36px 36px', top: 0 };
         case 'weather':
@@ -74,6 +76,8 @@ export const getIslandDimensions = (
         return { width: 480, height: 232, borderRadius: '36px 36px 36px 36px', top: 12 };
       case 'servers':
         return { width: 620, height: 360, borderRadius: '36px 36px 36px 36px', top: 12 };
+      case 'converter':
+        return { width: 520, height: 268, borderRadius: '36px 36px 36px 36px', top: 12 };
       case 'notifications':
         return { width: 360, height: 215, borderRadius: '36px 36px 36px 36px', top: 12 };
       case 'weather':
