@@ -1,5 +1,6 @@
 pub mod battery;
 pub mod clipboard;
+pub mod converter;
 pub mod credentials;
 pub mod server_store;
 pub mod servers;
@@ -262,6 +263,16 @@ pub fn run() {
             settings::set_autostart_enabled,
             settings::hide_settings_window,
             settings::minimize_settings_window,
+            settings::set_settings_backdrop,
+            settings::open_floating_server_window,
+            settings::close_floating_server_window,
+            settings::set_floating_server_always_on_top,
+            settings::open_floating_note_window,
+            settings::close_floating_note_window,
+            settings::set_floating_notes_style,
+            settings::clear_floating_window_backdrop,
+            settings::show_floating_window,
+            settings::apply_floating_window_backdrop,
             media::media_toggle_play_pause,
             media::media_skip_next,
             media::media_skip_prev,
@@ -278,6 +289,12 @@ pub fn run() {
             server_store::server_upsert,
             server_store::server_delete,
             server_store::server_credential_save,
+            converter::convert_image_path,
+            converter::convert_image_bytes,
+            converter::reveal_file_in_explorer,
+            converter::get_default_converter_dir,
+            converter::pick_converter_output_dir,
+            converter::open_converter_output_dir,
         ])
         .run(tauri::generate_context!());
 

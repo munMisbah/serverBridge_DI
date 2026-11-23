@@ -16,7 +16,31 @@ export type ActiveTab =
   | 'notifications'
   | 'clipboard'
   | 'battery'
-  | 'servers';
+  | 'servers'
+  | 'converter';
+
+export type ImageConvertFormat = 'webp' | 'jpg' | 'png' | 'avif';
+
+export type SettingsBackdrop = 'mica' | 'acrylic' | 'slate' | 'tabbed' | 'solid';
+
+export interface GlassThemeConfig {
+  tintColor: string;
+  opacity: number; // 0..95 for Settings & Floating Server
+  borderOpacity: number; // 0..40 for window border highlight
+  separateNotes: boolean;
+  notesOpacity: number; // 0..95 for Dark-Glass Floating Notes when separateNotes is true
+}
+
+export type NoteStyle = 'classic' | 'dark-glass';
+
+export interface FloatingServerWindow {
+  serverId: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  z: number;
+}
 
 export interface SystemBattery {
   level: number; // 0-100
@@ -234,6 +258,12 @@ export interface UserSettings {
   compactLeftSlot: CompactSlotType;
   compactRightSlot: CompactSlotType;
   mediaPlacement: MediaSlotPlacement;
+  tabOrder?: ActiveTab[];
+  hiddenTabs?: ActiveTab[];
+  converterOutputDir?: string | null;
+  settingsBackdrop?: SettingsBackdrop;
+  glassTheme?: GlassThemeConfig;
+  noteStyle?: NoteStyle;
 }
 
 export interface AudioPlaybackState {

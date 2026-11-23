@@ -11,16 +11,48 @@ import { CompactView } from './CompactView';
 import { NotificationView } from './NotificationView';
 import { ExpandedView } from './ExpandedView';
 import { getIslandDimensions } from './dimensions';
-import { setIslandHitRect } from '../../lib/hitTest';
+import {
+  isCollapseSuppressed,
+  setCollapseSuppressed,
+  setHitTestForce,
+  setIslandHitRect,
+} from '../../lib/hitTest';
 import { NotesLayer } from '../Notes/NotesLayer';
+import { FloatingServersLayer } from '../Servers/FloatingServersLayer';
+import { playFloatingNoteGenie, playFloatingServerGenie } from '../../lib/floatingGenie';
 
 const HOVER_EXPAND_DELAY = 30;
 const HOVER_COLLAPSE_DELAY = 120;
 const NOTCH_EAR_RADIUS = 14;
 export const IslandRoot: React.FC = () => {
-  const { state, setState, activeNotification, settings, audioPlayback, activeTab } =
-    useIsland();
+  const {
+    state,
+    setState,
+    activeNotification,
+    settings,
+    audioPlayback,
+    activeTab,
+    setActiveTab,
+    isDraggingImageFile,
+    setIsDraggingImageFile,
+    notes,
+    servers,
+  } = useIsland();
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
+  const serversRef = useRef(servers);
+  serversRef.current = servers;
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
   const islandRef = useRef<HTMLDivElement>(null);
+  const htmlDragDepthRef = useRef(0);
+  const tauriImageDragRef = useRef(false);
+
+  useEffect(() => {
+    if (!isDraggingImageFile) {
+      htmlDragDepthRef.current = 0;
+    }
+  }, [isDraggingImageFile]);
 
   const hoverExpandTimer = useRef<number | undefined>(undefined);
   const hoverCollapseTimer = useRef<number | undefined>(undefined);
@@ -29,6 +61,7 @@ export const IslandRoot: React.FC = () => {
   const triggerRef = useRef(settings.expandTrigger);
   const isHoveredRef = useRef(false);
   const [isDodged, setIsDodged] = useState(false);
+  const [dockZoneActive, setDockZoneActive] = useState(false);
   const isDodgedRef = useRef(false);
   isDodgedRef.current = isDodged;
   const isTauri =
@@ -70,7 +103,7 @@ export const IslandRoot: React.FC = () => {
     window.clearTimeout(hoverExpandTimer.current);
     window.clearTimeout(hoverCollapseTimer.current);
     hoverCollapseTimer.current = window.setTimeout(() => {
-      if (stateRef.current !== 'expanded') {
+      if (stateRef.current !== 'expanded' || isCollapseSuppressed()) {
         return;
       }
 
@@ -162,6 +195,89 @@ export const IslandRoot: React.FC = () => {
     };
   }, [isTauri]);
 
+  // Listen for floating server OR floating note entering the top-center dock zone to pulse/highlight the Island
+  useEffect(() => {
+    if (!isTauri) return;
+    let cancelled = false;
+    let pulseTimer: number | undefined;
+    const unlisteners: (() => void)[] = [];
+    import('@tauri-apps/api/event')
+      .then(async ({ listen }) => {
+        const u1 = await listen<{ serverId: string; active: boolean }>(
+          'floating-server-dock-zone',
+          (event) => {
+            setDockZoneActive(event.payload.active);
+          }
+        );
+        const u2 = await listen<{ noteId: string; active: boolean }>(
+          'floating-note-dock-zone',
+          (event) => {
+            setDockZoneActive(event.payload.active);
+          }
+        );
+        const u3 = await listen<string>('island-dock-pulse', () => {
+          setDockZoneActive(true);
+          window.clearTimeout(pulseTimer);
+          pulseTimer = window.setTimeout(() => setDockZoneActive(false), 260);
+        });
+        const u4 = await listen<{
+          kind: 'note' | 'server';
+          id: string;
+          direction: 'open' | 'minimize';
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+        }>('play-floating-genie', (event) => {
+          const { kind, id, direction, x, y, width, height } = event.payload;
+          const rect = { x, y, w: width, h: height };
+          const triggerPulse = () => {
+            setDockZoneActive(true);
+            window.clearTimeout(pulseTimer);
+            pulseTimer = window.setTimeout(() => setDockZoneActive(false), 260);
+          };
+          if (kind === 'note') {
+            const note = notesRef.current.find((n) => n.id === id);
+            if (note) {
+              void playFloatingNoteGenie(
+                note,
+                direction,
+                rect,
+                settingsRef.current,
+                triggerPulse
+              );
+            } else {
+              triggerPulse();
+            }
+          } else {
+            const srv = serversRef.current.find((s) => s.id === id);
+            void playFloatingServerGenie(
+              srv,
+              id,
+              direction,
+              rect,
+              settingsRef.current,
+              triggerPulse
+            );
+          }
+        });
+        if (cancelled) {
+          u1();
+          u2();
+          u3();
+          u4();
+        } else {
+          unlisteners.push(u1, u2, u3, u4);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+      window.clearTimeout(pulseTimer);
+      unlisteners.forEach((fn) => fn());
+    };
+  }, [isTauri]);
+
   // Expose global preview trigger on window for simulator testing
   useEffect(() => {
     interface WindowWithDodge {
@@ -207,7 +323,8 @@ export const IslandRoot: React.FC = () => {
         state === 'expanded' &&
         islandRef.current &&
         !islandRef.current.contains(e.target as Node) &&
-        !target?.closest?.('[data-notes-layer]')
+        !target?.closest?.('[data-notes-layer]') &&
+        !target?.closest?.('[data-floating-servers-layer]')
       ) {
         setState('compact');
       }
@@ -216,6 +333,9 @@ export const IslandRoot: React.FC = () => {
     document.addEventListener('pointerdown', handlePointerDown);
 
     const handleWindowBlur = () => {
+      // Safety net: always release force-interactive on blur so click-through
+      // to desktop apps can never get stuck.
+      setHitTestForce(false);
       // If the mouse is still hovering over the island, do not collapse.
       // A blur event while mouse is inside is caused by tooltips or internal element focus shifts.
       if (isHoveredRef.current) return;
@@ -238,6 +358,124 @@ export const IslandRoot: React.FC = () => {
   }, [clearHoverTimers, settings.expandTrigger]);
 
   useEffect(() => () => clearHoverTimers(), [clearHoverTimers]);
+
+  // Auto-open Converter tab when dragging a JPG/PNG file from OS over the Island (Tauri).
+  useEffect(() => {
+    if (!isTauri) return;
+
+    let cancelled = false;
+    let unlisten: (() => void) | undefined;
+    const isSupportedImg = (p: string) => /\.(jpe?g|png)$/i.test(p);
+
+    const isOverIsland = (x: number, y: number): boolean => {
+      const el = islandRef.current;
+      if (!el) return false;
+      const r = el.getBoundingClientRect();
+      const pad = 20;
+      return x >= r.left - pad && x <= r.right + pad && y >= 0 && y <= r.bottom + pad;
+    };
+
+    import('@tauri-apps/api/webview')
+      .then(({ getCurrentWebview }) =>
+        getCurrentWebview().onDragDropEvent((event) => {
+          if (cancelled) return;
+          const payload = event.payload;
+          const dpr = window.devicePixelRatio || 1;
+          const converterHidden = (settings.hiddenTabs ?? []).includes('converter');
+
+          if (payload.type === 'enter') {
+            const hasImage = payload.paths.some(isSupportedImg);
+            tauriImageDragRef.current = hasImage;
+            if (hasImage && !converterHidden) {
+              const x = payload.position.x / dpr;
+              const y = payload.position.y / dpr;
+              if (isOverIsland(x, y)) {
+                setCollapseSuppressed(true);
+                setIsDraggingImageFile(true);
+                setActiveTab('converter');
+                setState('expanded');
+              }
+            }
+          } else if (payload.type === 'over') {
+            if (tauriImageDragRef.current && !converterHidden) {
+              const x = payload.position.x / dpr;
+              const y = payload.position.y / dpr;
+              if (isOverIsland(x, y)) {
+                setCollapseSuppressed(true);
+                setIsDraggingImageFile(true);
+                setActiveTab('converter');
+                setState('expanded');
+              } else {
+                setIsDraggingImageFile(false);
+                setCollapseSuppressed(false);
+              }
+            }
+          } else {
+            tauriImageDragRef.current = false;
+            setIsDraggingImageFile(false);
+            setCollapseSuppressed(false);
+          }
+        })
+      )
+      .then((fn) => {
+        if (cancelled) fn();
+        else unlisten = fn;
+      })
+      .catch(() => {});
+
+    return () => {
+      cancelled = true;
+      tauriImageDragRef.current = false;
+      setIsDraggingImageFile(false);
+      setCollapseSuppressed(false);
+      unlisten?.();
+    };
+  }, [isTauri, settings.hiddenTabs, setActiveTab, setState, setIsDraggingImageFile]);
+
+  const isHtmlImageDrag = (dt: DataTransfer | null): boolean => {
+    if (!dt) return false;
+    if (!Array.from(dt.types ?? []).includes('Files')) return false;
+    const items = Array.from(dt.items ?? []);
+    if (items.length === 0) return true;
+    return items.some(
+      (item) =>
+        item.kind === 'file' &&
+        (item.type === '' || item.type === 'image/jpeg' || item.type === 'image/png')
+    );
+  };
+
+  const handleIslandDragEnter = (e: React.DragEvent) => {
+    if ((settings.hiddenTabs ?? []).includes('converter')) return;
+    if (!isHtmlImageDrag(e.dataTransfer)) return;
+    e.preventDefault();
+    htmlDragDepthRef.current += 1;
+    setCollapseSuppressed(true);
+    setIsDraggingImageFile(true);
+    setActiveTab('converter');
+    setState('expanded');
+  };
+
+  const handleIslandDragOver = (e: React.DragEvent) => {
+    if ((settings.hiddenTabs ?? []).includes('converter')) return;
+    if (!isHtmlImageDrag(e.dataTransfer)) return;
+    e.preventDefault();
+  };
+
+  const handleIslandDragLeave = (e: React.DragEvent) => {
+    if (htmlDragDepthRef.current <= 0) return;
+    e.preventDefault();
+    htmlDragDepthRef.current = Math.max(0, htmlDragDepthRef.current - 1);
+    if (htmlDragDepthRef.current === 0) {
+      setIsDraggingImageFile(false);
+      setCollapseSuppressed(false);
+    }
+  };
+
+  const handleIslandDrop = () => {
+    htmlDragDepthRef.current = 0;
+    setIsDraggingImageFile(false);
+    setCollapseSuppressed(false);
+  };
 
   const handleClick = () => {
     if (state === 'compact') {
@@ -295,12 +533,17 @@ export const IslandRoot: React.FC = () => {
           data-island
           className="pointer-events-auto relative select-none text-white"
           animate={{
-            y: effectiveY,
+            y: dockZoneActive ? dimensions.top : effectiveY,
             width: dimensions.width,
             height: dimensions.height,
+            scale: dockZoneActive ? 1.04 : 1,
           }}
           transition={transition}
           onClick={handleClick}
+          onDragEnter={handleIslandDragEnter}
+          onDragOver={handleIslandDragOver}
+          onDragLeave={handleIslandDragLeave}
+          onDrop={handleIslandDrop}
           onPointerEnter={
             isTauri ? undefined : () => handleHoverChange(true)
           }
@@ -354,9 +597,11 @@ export const IslandRoot: React.FC = () => {
             className="relative h-full w-full overflow-hidden text-white"
             style={{
               background: glassGradient,
-              border: glassBorder,
-              borderTop: glassBorderTop,
-              boxShadow: glassShadow,
+              border: dockZoneActive ? '1.5px solid rgba(56, 189, 248, 0.78)' : glassBorder,
+              borderTop: dockZoneActive ? '1.5px solid rgba(56, 189, 248, 0.9)' : glassBorderTop,
+              boxShadow: dockZoneActive
+                ? '0 0 24px rgba(56, 189, 248, 0.42), inset 0 0 14px rgba(56, 189, 248, 0.22)'
+                : glassShadow,
             }}
             animate={{
               borderRadius: dimensions.borderRadius,
@@ -397,8 +642,9 @@ export const IslandRoot: React.FC = () => {
         </motion.div>
       </div>
 
-      {/* Floating sticky notes (rendered above the island, outside its clip) */}
+      {/* Floating sticky notes & detached server cards (rendered above the island, outside its clip) */}
       <NotesLayer />
+      <FloatingServersLayer />
     </>
   );
 };

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useIsland } from '../../context/IslandContext';
 import { setExtraHitRects } from '../../lib/hitTest';
+import { isRectOnPrimaryMonitor, playFloatingNoteGenie } from '../../lib/floatingGenie';
 import { peekNoteOrigin } from '../../lib/noteTransition';
 import type { NoteItem } from '../../types';
 import { StickyNote } from './StickyNote';
@@ -18,13 +19,101 @@ const CLOSE_ANIMATION_MS = 720;
  * click-through.
  */
 export const NotesLayer: React.FC = () => {
-  const { notes, updateNote } = useIsland();
+  const { notes, updateNote, settings } = useIsland();
+  const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
   const openNotes = useMemo(() => notes.filter((n) => !n.minimized), [notes]);
   const [layerReady] = useState(true);
   // Cards that just got minimized/deleted, kept mounted while they fly home.
   const [closingNotes, setClosingNotes] = useState<NoteItem[]>([]);
   const previousOpen = useRef<NoteItem[]>([]);
   const closeTimers = useRef<number[]>([]);
+  const nativeOpenedRef = useRef<Set<string>>(new Set());
+
+  // In Tauri desktop mode, manage open notes as native multi-monitor OS windows
+  // arranged in a clean non-overlapping tile grid (never stacked in a pile on Expand All).
+  useEffect(() => {
+    if (!isTauri) return;
+    const currentIds = new Set(openNotes.map((n) => n.id));
+    const darkGlass = (settings.noteStyle ?? 'classic') === 'dark-glass';
+    const newlyOpening = openNotes.filter((n) => !nativeOpenedRef.current.has(n.id));
+
+    import('@tauri-apps/api/core')
+      .then(({ invoke }) => {
+        const vw = window.innerWidth || 1280;
+        const vh = window.innerHeight || 800;
+        const tileGap = 16;
+        const cellW = 248 + tileGap;
+        const cellH = 210 + tileGap;
+        const cols = Math.max(1, Math.min(4, Math.floor((vw - 64) / cellW)));
+        const gridStartX = Math.max(24, Math.round((vw - cols * cellW + tileGap) / 2));
+
+        // Open newly unminimized notes (preserving user's saved position, even on secondary/left monitors!)
+        newlyOpening.forEach((n, idx) => {
+          nativeOpenedRef.current.add(n.id);
+          const col = idx % cols;
+          const row = Math.floor(idx / cols);
+          const gridX = Math.max(16, Math.min(gridStartX + col * cellW, vw - n.width - 16));
+          const gridY = Math.max(96, Math.min(104 + row * cellH, vh - n.height - 24));
+          const hasSavedPos = !(n.x === -1 && n.y === -1);
+          const x = hasSavedPos ? n.x : gridX;
+          const y = hasSavedPos ? n.y : gridY;
+          const rect = { x, y, w: n.width, h: n.height };
+          const backdrop = settings.settingsBackdrop ?? 'acrylic';
+          const canGenie = !settings.reducedMotionEnabled && isRectOnPrimaryMonitor(rect);
+
+          const launchNote = () => {
+            if (!nativeOpenedRef.current.has(n.id)) return;
+            const openRealWindow = () => {
+              if (!nativeOpenedRef.current.has(n.id)) return;
+              void invoke('open_floating_note_window', {
+                noteId: n.id,
+                width: n.width,
+                height: n.height,
+                x,
+                y,
+                darkGlass,
+                backdrop,
+                initiallyHidden: false,
+              }).catch(() => {
+                nativeOpenedRef.current.delete(n.id);
+              });
+            };
+
+            if (canGenie) {
+              let opened = false;
+              const triggerOpen = () => {
+                if (opened) return;
+                opened = true;
+                openRealWindow();
+              };
+              void playFloatingNoteGenie(n, 'open', rect, settings, triggerOpen).finally(
+                triggerOpen
+              );
+            } else {
+              openRealWindow();
+            }
+          };
+
+          if (idx > 0 && newlyOpening.length > 1) {
+            window.setTimeout(launchNote, idx * 65);
+          } else {
+            launchNote();
+          }
+        });
+
+        // Close minimized/deleted notes
+        Array.from(nativeOpenedRef.current).forEach((id) => {
+          if (!currentIds.has(id)) {
+            nativeOpenedRef.current.delete(id);
+            void invoke('close_floating_note_window', {
+              noteId: id,
+              focusMain: false,
+            }).catch(() => {});
+          }
+        });
+      })
+      .catch(() => {});
+  }, [isTauri, openNotes, settings.noteStyle]);
 
   // Track notes leaving the open set so they can animate out instead of popping.
   useEffect(() => {
@@ -94,9 +183,9 @@ export const NotesLayer: React.FC = () => {
     return () => window.removeEventListener('resize', clampAll);
   }, [layerReady, openNotes, updateNote]);
 
-  // Register note rects so the native layer only grabs clicks over them.
+  // Register note rects so the native layer only grabs clicks over them (browser/overlay mode).
   useEffect(() => {
-    if (!layerReady) {
+    if (isTauri || !layerReady) {
       setExtraHitRects([]);
       return;
     }
@@ -105,7 +194,9 @@ export const NotesLayer: React.FC = () => {
         .filter((n) => n.x >= 0 && n.y >= 0)
         .map((n) => ({ x: n.x, y: n.y, width: n.width, height: n.height }))
     );
-  }, [layerReady, openNotes]);
+  }, [isTauri, layerReady, openNotes]);
+
+  if (isTauri) return null;
 
   const openIds = new Set(openNotes.map((n) => n.id));
 
