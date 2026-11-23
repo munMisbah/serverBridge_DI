@@ -1,5 +1,12 @@
-import { CompactSlotType, MediaSlotPlacement, NoteStyle, SettingsBackdrop } from '../../types';
+import {
+  CompactSlotType,
+  GlassThemeConfig,
+  MediaSlotPlacement,
+  NoteStyle,
+  SettingsBackdrop,
+} from '../../types';
 import React, { useEffect, useState } from 'react';
+import { ChevronDown, ChevronUp, RotateCcw } from 'lucide-react';
 import { TuningIcon } from '@solar-icons/react/bold/tuning';
 import { LayersMinimalisticIcon } from '@solar-icons/react/bold/layers-minimalistic';
 import { CursorIcon } from '@solar-icons/react/bold/cursor';
@@ -13,6 +20,12 @@ import { RestartIcon } from '@solar-icons/react/bold/restart';
 import { ShieldIcon } from '@solar-icons/react/bold/shield';
 import { useIsland } from '../../context/IslandContext';
 import { INDONESIA_WEATHER_LOCATIONS } from '../../utils/locations';
+import {
+  GLASS_TINT_PRESETS,
+  getDefaultGlassTheme,
+  resolveGlassSurfaceStyle,
+  resolveGlassTheme,
+} from '../../utils/glassTheme';
 
 interface ToggleRowProps {
   icon: React.ReactNode;
@@ -100,31 +113,55 @@ export const SettingsWindow: React.FC = () => {
   const activeBackdrop: SettingsBackdrop = settings.settingsBackdrop ?? 'acrylic';
   const activeNoteStyle: NoteStyle = settings.noteStyle ?? 'classic';
   const useNativeBackdrop = isTauri && activeBackdrop !== 'solid';
+  const glassTheme = resolveGlassTheme(activeBackdrop, settings.glassTheme);
+  const [showAdvancedTheme, setShowAdvancedTheme] = useState(false);
 
-  // Apply Windows 11 native DWM backdrop (Mica / Acrylic / Tabbed / Solid) live
+  const patchGlassTheme = (patch: Partial<GlassThemeConfig>) => {
+    updateSettings({
+      glassTheme: {
+        ...glassTheme,
+        ...patch,
+      },
+    });
+  };
+
+  // Apply Windows 11 native DWM backdrop (Mica / Dark Glass / Slate Glass / Tabbed / Solid) live
   useEffect(() => {
     if (!isTauri) return;
     import('@tauri-apps/api/core')
-      .then(({ invoke }) => invoke('set_settings_backdrop', { backdrop: activeBackdrop }))
+      .then(({ invoke }) =>
+        invoke('set_settings_backdrop', {
+          backdrop: activeBackdrop,
+          applyToNotes: activeNoteStyle === 'dark-glass',
+        })
+      )
       .catch((err) => console.debug('Backdrop DWM skipped:', err));
-  }, [isTauri, activeBackdrop]);
+  }, [isTauri, activeBackdrop, activeNoteStyle]);
 
   // Sync Floating Notes style live to any open native note windows
   useEffect(() => {
     if (!isTauri) return;
     import('@tauri-apps/api/core')
       .then(({ invoke }) =>
-        invoke('set_floating_notes_style', { darkGlass: activeNoteStyle === 'dark-glass' })
+        invoke('set_floating_notes_style', {
+          darkGlass: activeNoteStyle === 'dark-glass',
+          backdrop: activeBackdrop,
+        })
       )
       .catch(() => {});
-  }, [isTauri, activeNoteStyle]);
+  }, [isTauri, activeNoteStyle, activeBackdrop]);
+
+  const rootGlassStyle = useNativeBackdrop
+    ? resolveGlassSurfaceStyle(activeBackdrop, settings.glassTheme, 'window')
+    : undefined;
 
   return (
     <div
+      style={rootGlassStyle}
       className={`flex h-screen w-screen flex-col overflow-hidden text-white select-none ${
-        useNativeBackdrop
-          ? 'bg-transparent'
-          : 'bg-[#0c0d12] rounded-[24px] shadow-[0_16px_40px_rgba(0,0,0,0.7)]'
+        !useNativeBackdrop
+          ? 'bg-[#0c0d12] rounded-[24px] shadow-[0_16px_40px_rgba(0,0,0,0.7)]'
+          : ''
       }`}
     >
       {/* Native macOS-Style Draggable Titlebar */}
@@ -254,11 +291,12 @@ export const SettingsWindow: React.FC = () => {
               {activeBackdrop}
             </span>
           </div>
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-5 gap-1.5">
             {(
               [
                 { id: 'mica', label: 'Mica' },
-                { id: 'acrylic', label: 'Acrylic' },
+                { id: 'acrylic', label: 'Dark Glass' },
+                { id: 'slate', label: 'Slate Glass' },
                 { id: 'tabbed', label: 'Tabbed' },
                 { id: 'solid', label: 'Solid' },
               ] as { id: SettingsBackdrop; label: string }[]
@@ -266,8 +304,20 @@ export const SettingsWindow: React.FC = () => {
               <button
                 key={opt.id}
                 type="button"
-                onClick={() => updateSettings({ settingsBackdrop: opt.id })}
-                className={`rounded-xl py-2 text-[11px] font-medium transition-all ${
+                onClick={() => {
+                  const preset = getDefaultGlassTheme(opt.id);
+                  updateSettings({
+                    settingsBackdrop: opt.id,
+                    glassTheme: {
+                      ...preset,
+                      separateNotes: glassTheme.separateNotes,
+                      notesOpacity: glassTheme.separateNotes
+                        ? glassTheme.notesOpacity
+                        : preset.opacity,
+                    },
+                  });
+                }}
+                className={`rounded-xl py-2 text-[10px] font-medium transition-all ${
                   activeBackdrop === opt.id
                     ? 'bg-sky-500 text-white font-semibold shadow-md'
                     : 'bg-white/[0.05] text-neutral-400 hover:bg-white/[0.1] hover:text-white'
@@ -276,6 +326,182 @@ export const SettingsWindow: React.FC = () => {
                 {opt.label}
               </button>
             ))}
+          </div>
+
+          {/* Collapsible Advanced Glass Theme Customizer */}
+          <div className="pt-2 border-t border-white/[0.06]">
+            <button
+              type="button"
+              onClick={() => setShowAdvancedTheme((v) => !v)}
+              className="flex w-full items-center justify-between rounded-lg px-1 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] text-neutral-300 transition-colors hover:text-white"
+            >
+              <span className="flex items-center gap-1.5">
+                <span
+                  className="h-2.5 w-2.5 rounded-full ring-1 ring-white/30"
+                  style={{ backgroundColor: glassTheme.tintColor }}
+                />
+                Advanced Theme
+              </span>
+              <span className="flex items-center gap-1 text-[9.5px] font-normal normal-case tracking-normal text-neutral-400">
+                {glassTheme.opacity}% · Border {glassTheme.borderOpacity}%
+                {showAdvancedTheme ? <ChevronUp size={13} /> : <ChevronDown size={13} />}
+              </span>
+            </button>
+
+            {showAdvancedTheme && (
+              <div className="mt-2 space-y-3 rounded-xl bg-black/25 p-3 ring-1 ring-white/[0.06]">
+                {/* Tint Color Presets + Custom Picker */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="font-semibold text-neutral-300">Warna Tint Kaca</span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-mono text-[9.5px] uppercase text-neutral-400">
+                        {glassTheme.tintColor}
+                      </span>
+                      <button
+                        type="button"
+                        title="Reset ke default backdrop"
+                        onClick={() =>
+                          updateSettings({
+                            glassTheme: getDefaultGlassTheme(activeBackdrop),
+                          })
+                        }
+                        className="flex items-center gap-1 rounded-md bg-white/[0.07] px-1.5 py-0.5 text-[9px] text-neutral-300 hover:bg-white/[0.14] hover:text-white"
+                      >
+                        <RotateCcw size={9} /> Reset
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {GLASS_TINT_PRESETS.map((preset) => {
+                      const selected =
+                        glassTheme.tintColor.toLowerCase() === preset.color.toLowerCase();
+                      return (
+                        <button
+                          key={preset.id}
+                          type="button"
+                          title={preset.label}
+                          onClick={() => patchGlassTheme({ tintColor: preset.color })}
+                          className={`h-6 w-6 rounded-full transition-transform hover:scale-110 ${
+                            selected
+                              ? 'ring-2 ring-sky-400 ring-offset-2 ring-offset-neutral-900'
+                              : 'ring-1 ring-white/25'
+                          }`}
+                          style={{ backgroundColor: preset.color }}
+                        />
+                      );
+                    })}
+                    <label
+                      title="Pilih warna kustom"
+                      className="ml-auto flex cursor-pointer items-center gap-1.5 rounded-lg bg-white/[0.07] px-2 py-1 text-[9.5px] font-medium text-neutral-300 hover:bg-white/[0.12] hover:text-white"
+                    >
+                      <input
+                        type="color"
+                        value={glassTheme.tintColor}
+                        onChange={(e) => patchGlassTheme({ tintColor: e.target.value })}
+                        className="h-3.5 w-3.5 cursor-pointer border-0 bg-transparent p-0"
+                      />
+                      Custom
+                    </label>
+                  </div>
+                </div>
+
+                {/* Darkness / Opacity Slider */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="font-medium text-neutral-300">
+                      Kepekatan Gelap {glassTheme.separateNotes ? '(Settings & Server)' : '(Semua Window)'}
+                    </span>
+                    <span className="font-mono text-[10px] text-sky-300">{glassTheme.opacity}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={95}
+                    step={1}
+                    value={glassTheme.opacity}
+                    disabled={activeBackdrop === 'solid'}
+                    onChange={(e) => patchGlassTheme({ opacity: Number(e.target.value) })}
+                    className="h-1.5 w-full cursor-pointer accent-sky-400 disabled:opacity-40"
+                  />
+                </div>
+
+                {/* Border Opacity Slider */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between text-[10px]">
+                    <span className="font-medium text-neutral-300">Opacity Border Kaca</span>
+                    <span className="font-mono text-[10px] text-sky-300">
+                      {glassTheme.borderOpacity}%
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min={0}
+                    max={40}
+                    step={1}
+                    value={glassTheme.borderOpacity}
+                    onChange={(e) => patchGlassTheme({ borderOpacity: Number(e.target.value) })}
+                    className="h-1.5 w-full cursor-pointer accent-sky-400"
+                  />
+                </div>
+
+                {/* Separate Notes Opacity Toggle + Slider */}
+                <div className="space-y-2 border-t border-white/[0.06] pt-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-[10.5px] font-semibold text-white">
+                        Atur Kepekatan Notes Terpisah
+                      </p>
+                      <p className="text-[9px] text-neutral-400">
+                        Beda transparansi antara Notes dan Settings/Server
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={glassTheme.separateNotes}
+                      onClick={() =>
+                        patchGlassTheme({ separateNotes: !glassTheme.separateNotes })
+                      }
+                      className={`relative h-5 w-9 shrink-0 rounded-full transition-colors ${
+                        glassTheme.separateNotes ? 'bg-sky-500' : 'bg-white/15'
+                      }`}
+                    >
+                      <span
+                        className={`block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform ${
+                          glassTheme.separateNotes ? 'translate-x-4.5' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {glassTheme.separateNotes && (
+                    <div className="space-y-1">
+                      <div className="flex items-center justify-between text-[10px]">
+                        <span className="font-medium text-neutral-300">
+                          Kepekatan Floating Notes
+                        </span>
+                        <span className="font-mono text-[10px] text-sky-300">
+                          {glassTheme.notesOpacity}%
+                        </span>
+                      </div>
+                      <input
+                        type="range"
+                        min={0}
+                        max={95}
+                        step={1}
+                        value={glassTheme.notesOpacity}
+                        disabled={activeBackdrop === 'solid'}
+                        onChange={(e) =>
+                          patchGlassTheme({ notesOpacity: Number(e.target.value) })
+                        }
+                        className="h-1.5 w-full cursor-pointer accent-sky-400 disabled:opacity-40"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Floating Notes Visual Style (Classic Pastel vs Dark Transparent Acrylic) */}

@@ -19,6 +19,7 @@ import {
 } from '../../lib/hitTest';
 import { NotesLayer } from '../Notes/NotesLayer';
 import { FloatingServersLayer } from '../Servers/FloatingServersLayer';
+import { playFloatingNoteGenie, playFloatingServerGenie } from '../../lib/floatingGenie';
 
 const HOVER_EXPAND_DELAY = 30;
 const HOVER_COLLAPSE_DELAY = 120;
@@ -34,7 +35,15 @@ export const IslandRoot: React.FC = () => {
     setActiveTab,
     isDraggingImageFile,
     setIsDraggingImageFile,
+    notes,
+    servers,
   } = useIsland();
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
+  const serversRef = useRef(servers);
+  serversRef.current = servers;
+  const settingsRef = useRef(settings);
+  settingsRef.current = settings;
   const islandRef = useRef<HTMLDivElement>(null);
   const htmlDragDepthRef = useRef(0);
   const tauriImageDragRef = useRef(false);
@@ -190,6 +199,7 @@ export const IslandRoot: React.FC = () => {
   useEffect(() => {
     if (!isTauri) return;
     let cancelled = false;
+    let pulseTimer: number | undefined;
     const unlisteners: (() => void)[] = [];
     import('@tauri-apps/api/event')
       .then(async ({ listen }) => {
@@ -205,16 +215,65 @@ export const IslandRoot: React.FC = () => {
             setDockZoneActive(event.payload.active);
           }
         );
+        const u3 = await listen<string>('island-dock-pulse', () => {
+          setDockZoneActive(true);
+          window.clearTimeout(pulseTimer);
+          pulseTimer = window.setTimeout(() => setDockZoneActive(false), 260);
+        });
+        const u4 = await listen<{
+          kind: 'note' | 'server';
+          id: string;
+          direction: 'open' | 'minimize';
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+        }>('play-floating-genie', (event) => {
+          const { kind, id, direction, x, y, width, height } = event.payload;
+          const rect = { x, y, w: width, h: height };
+          const triggerPulse = () => {
+            setDockZoneActive(true);
+            window.clearTimeout(pulseTimer);
+            pulseTimer = window.setTimeout(() => setDockZoneActive(false), 260);
+          };
+          if (kind === 'note') {
+            const note = notesRef.current.find((n) => n.id === id);
+            if (note) {
+              void playFloatingNoteGenie(
+                note,
+                direction,
+                rect,
+                settingsRef.current,
+                triggerPulse
+              );
+            } else {
+              triggerPulse();
+            }
+          } else {
+            const srv = serversRef.current.find((s) => s.id === id);
+            void playFloatingServerGenie(
+              srv,
+              id,
+              direction,
+              rect,
+              settingsRef.current,
+              triggerPulse
+            );
+          }
+        });
         if (cancelled) {
           u1();
           u2();
+          u3();
+          u4();
         } else {
-          unlisteners.push(u1, u2);
+          unlisteners.push(u1, u2, u3, u4);
         }
       })
       .catch(() => {});
     return () => {
       cancelled = true;
+      window.clearTimeout(pulseTimer);
       unlisteners.forEach((fn) => fn());
     };
   }, [isTauri]);

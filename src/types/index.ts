@@ -21,7 +21,15 @@ export type ActiveTab =
 
 export type ImageConvertFormat = 'webp' | 'jpg' | 'png' | 'avif';
 
-export type SettingsBackdrop = 'mica' | 'acrylic' | 'tabbed' | 'solid';
+export type SettingsBackdrop = 'mica' | 'acrylic' | 'slate' | 'tabbed' | 'solid';
+
+export interface GlassThemeConfig {
+  tintColor: string;
+  opacity: number; // 0..95 for Settings & Floating Server
+  borderOpacity: number; // 0..40 for window border highlight
+  separateNotes: boolean;
+  notesOpacity: number; // 0..95 for Dark-Glass Floating Notes when separateNotes is true
+}
 
 export type NoteStyle = 'classic' | 'dark-glass';
 
@@ -254,6 +262,7 @@ export interface UserSettings {
   hiddenTabs?: ActiveTab[];
   converterOutputDir?: string | null;
   settingsBackdrop?: SettingsBackdrop;
+  glassTheme?: GlassThemeConfig;
   noteStyle?: NoteStyle;
 }
 

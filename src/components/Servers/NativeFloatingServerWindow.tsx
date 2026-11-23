@@ -9,6 +9,7 @@ import { RefreshIcon } from '@solar-icons/react/bold/refresh';
 import { ArrowUp, GripHorizontal, Minimize2, Pin, PinOff } from 'lucide-react';
 import { useIsland } from '../../context/IslandContext';
 import { AppsActivity } from '../Dashboard/AppsActivity';
+import { resolveGlassSurfaceStyle } from '../../utils/glassTheme';
 import {
   formatBytes,
   formatUptime,
@@ -90,7 +91,6 @@ export const NativeFloatingServerWindow: React.FC<NativeFloatingServerWindowProp
     setInDockZone(false);
     setIsDocking(true);
     try {
-      await new Promise((r) => window.setTimeout(r, 210));
       await invoke('close_floating_server_window', {
         serverId,
         focusMain: true,
@@ -174,11 +174,19 @@ export const NativeFloatingServerWindow: React.FC<NativeFloatingServerWindowProp
   const activeBackdrop = settings.settingsBackdrop ?? 'acrylic';
   const useNativeBackdrop = isTauri && activeBackdrop !== 'solid';
 
-  // Ensure SWCA Acrylic / DWM backdrop is applied right after the window is shown
+  // Apply backdrop ONLY to this server window once mounted/updated
   useEffect(() => {
     if (!isTauri) return;
-    void invoke('set_settings_backdrop', { backdrop: activeBackdrop }).catch(() => {});
-  }, [isTauri, activeBackdrop]);
+    const raf = requestAnimationFrame(() => {
+      void invoke('apply_floating_window_backdrop', {
+        kind: 'server',
+        id: serverId,
+        darkGlass: true,
+        backdrop: activeBackdrop,
+      }).catch(() => {});
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [isTauri, serverId, activeBackdrop]);
 
   const running = snapshot
     ? snapshot.docker.filter((c) => c.state === 'running').length
@@ -192,35 +200,19 @@ export const NativeFloatingServerWindow: React.FC<NativeFloatingServerWindowProp
       ? Math.min(100, Math.max(0, (snapshot.diskUsedBytes / snapshot.diskTotalBytes) * 100))
       : 0;
 
+  const glassStyle = resolveGlassSurfaceStyle(activeBackdrop, settings.glassTheme, 'window');
+
   return (
     <motion.div
-      initial={{ opacity: 0, scaleX: 0.65, scaleY: 0.42, y: -24 }}
-      animate={
-        isDocking
-          ? {
-              opacity: 0,
-              scaleX: 0.18,
-              scaleY: 0.06,
-              y: -52,
-              borderRadius: '28px',
-            }
-          : {
-              opacity: inDockZone ? 0.84 : 1,
-              scaleX: inDockZone ? 0.96 : 1,
-              scaleY: inDockZone ? 0.96 : 1,
-              y: 0,
-              borderRadius: '0px',
-            }
-      }
-      transition={
-        isDocking
-          ? { duration: 0.2, ease: [0.4, 0, 0.2, 1] }
-          : { type: 'spring', stiffness: 420, damping: 28, mass: 0.7 }
-      }
-      style={isDocking ? { backgroundColor: 'rgba(14, 16, 22, 0.92)' } : undefined}
+      animate={{
+        opacity: inDockZone ? 0.84 : 1,
+        scale: inDockZone ? 0.96 : 1,
+      }}
+      transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+      style={glassStyle}
       className={`relative flex h-screen w-screen origin-top flex-col overflow-hidden text-white select-none transition-shadow ${
-        useNativeBackdrop ? 'bg-transparent' : 'bg-[#0c0d12]'
-      } ${inDockZone ? 'ring-2 ring-inset ring-sky-400/75' : ''}`}
+        inDockZone ? 'ring-2 ring-inset ring-sky-400/75' : ''
+      }`}
     >
       {/* Live Dock Indicator Pill */}
       <AnimatePresence>

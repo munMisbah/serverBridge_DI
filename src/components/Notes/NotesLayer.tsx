@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useIsland } from '../../context/IslandContext';
 import { setExtraHitRects } from '../../lib/hitTest';
+import { isRectOnPrimaryMonitor, playFloatingNoteGenie } from '../../lib/floatingGenie';
 import { peekNoteOrigin } from '../../lib/noteTransition';
 import type { NoteItem } from '../../types';
 import { StickyNote } from './StickyNote';
@@ -28,32 +29,76 @@ export const NotesLayer: React.FC = () => {
   const closeTimers = useRef<number[]>([]);
   const nativeOpenedRef = useRef<Set<string>>(new Set());
 
-  // In Tauri desktop mode, manage open notes as native multi-monitor OS windows.
+  // In Tauri desktop mode, manage open notes as native multi-monitor OS windows
+  // arranged in a clean non-overlapping tile grid (never stacked in a pile on Expand All).
   useEffect(() => {
     if (!isTauri) return;
     const currentIds = new Set(openNotes.map((n) => n.id));
     const darkGlass = (settings.noteStyle ?? 'classic') === 'dark-glass';
+    const newlyOpening = openNotes.filter((n) => !nativeOpenedRef.current.has(n.id));
 
     import('@tauri-apps/api/core')
       .then(({ invoke }) => {
-        // Open newly unminimized notes
-        openNotes.forEach((n, idx) => {
-          if (nativeOpenedRef.current.has(n.id)) return;
+        const vw = window.innerWidth || 1280;
+        const vh = window.innerHeight || 800;
+        const tileGap = 16;
+        const cellW = 248 + tileGap;
+        const cellH = 210 + tileGap;
+        const cols = Math.max(1, Math.min(4, Math.floor((vw - 64) / cellW)));
+        const gridStartX = Math.max(24, Math.round((vw - cols * cellW + tileGap) / 2));
+
+        // Open newly unminimized notes (preserving user's saved position, even on secondary/left monitors!)
+        newlyOpening.forEach((n, idx) => {
           nativeOpenedRef.current.add(n.id);
-          const vw = window.innerWidth || 1280;
-          const offset = (idx % 6) * CASCADE_STEP;
-          const x = n.x >= 0 ? n.x : Math.round(vw / 2) + 90 + offset;
-          const y = n.y >= 0 ? n.y : 120 + offset;
-          void invoke('open_floating_note_window', {
-            noteId: n.id,
-            width: n.width,
-            height: n.height,
-            x,
-            y,
-            darkGlass,
-          }).catch(() => {
-            nativeOpenedRef.current.delete(n.id);
-          });
+          const col = idx % cols;
+          const row = Math.floor(idx / cols);
+          const gridX = Math.max(16, Math.min(gridStartX + col * cellW, vw - n.width - 16));
+          const gridY = Math.max(96, Math.min(104 + row * cellH, vh - n.height - 24));
+          const hasSavedPos = !(n.x === -1 && n.y === -1);
+          const x = hasSavedPos ? n.x : gridX;
+          const y = hasSavedPos ? n.y : gridY;
+          const rect = { x, y, w: n.width, h: n.height };
+          const backdrop = settings.settingsBackdrop ?? 'acrylic';
+          const canGenie = !settings.reducedMotionEnabled && isRectOnPrimaryMonitor(rect);
+
+          const launchNote = () => {
+            if (!nativeOpenedRef.current.has(n.id)) return;
+            const openRealWindow = () => {
+              if (!nativeOpenedRef.current.has(n.id)) return;
+              void invoke('open_floating_note_window', {
+                noteId: n.id,
+                width: n.width,
+                height: n.height,
+                x,
+                y,
+                darkGlass,
+                backdrop,
+                initiallyHidden: false,
+              }).catch(() => {
+                nativeOpenedRef.current.delete(n.id);
+              });
+            };
+
+            if (canGenie) {
+              let opened = false;
+              const triggerOpen = () => {
+                if (opened) return;
+                opened = true;
+                openRealWindow();
+              };
+              void playFloatingNoteGenie(n, 'open', rect, settings, triggerOpen).finally(
+                triggerOpen
+              );
+            } else {
+              openRealWindow();
+            }
+          };
+
+          if (idx > 0 && newlyOpening.length > 1) {
+            window.setTimeout(launchNote, idx * 65);
+          } else {
+            launchNote();
+          }
         });
 
         // Close minimized/deleted notes

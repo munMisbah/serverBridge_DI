@@ -1,5 +1,6 @@
 import { DEFAULT_WEATHER_LOCATION } from '../utils/locations';
 import { NOTE_COLORS, NOTE_DEFAULT_HEIGHT, NOTE_DEFAULT_WIDTH } from '../utils/notes';
+import { isRectOnPrimaryMonitor, playFloatingServerGenie } from '../lib/floatingGenie';
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import {
@@ -426,8 +427,27 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         } catch {}
       } else if (e.key === 'di_notes' && e.newValue) {
         try {
-          const parsed = JSON.parse(e.newValue);
-          if (Array.isArray(parsed)) setNotes(parsed);
+          const parsed = JSON.parse(e.newValue) as NoteItem[];
+          if (Array.isArray(parsed)) {
+            const isMainWin =
+              !window.location.search.includes('floating-note') &&
+              !window.location.search.includes('floating-server') &&
+              !window.location.search.includes('settings') &&
+              window.location.hash !== '#settings';
+            setNotes((prev) => {
+              if (!isMainWin) {
+                return JSON.stringify(prev) === e.newValue ? prev : parsed;
+              }
+              // Main window owns `minimized` state so child windows mounting/closing
+              // can never re-open notes that were just minimized.
+              const prevById = new Map(prev.map((n) => [n.id, n]));
+              const merged = parsed.map((incoming) => {
+                const existing = prevById.get(incoming.id);
+                return existing ? { ...incoming, minimized: existing.minimized } : incoming;
+              });
+              return JSON.stringify(prev) === JSON.stringify(merged) ? prev : merged;
+            });
+          }
         } catch {}
       }
     };
@@ -482,9 +502,20 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   }, [servers, isTauriRuntime]);
 
-  // Save notes to local storage (debounced: typing must not write per keystroke)
+  // Save notes to local storage (debounced; skip initial mount in child windows to avoid stale overwrites)
   const notesPersistTimer = useRef<number | undefined>(undefined);
+  const notesMountedRef = useRef(false);
   useEffect(() => {
+    const isChildWin =
+      typeof window !== 'undefined' &&
+      (window.location.search.includes('floating-note') ||
+        window.location.search.includes('floating-server') ||
+        window.location.search.includes('settings') ||
+        window.location.hash === '#settings');
+    if (!notesMountedRef.current) {
+      notesMountedRef.current = true;
+      if (isChildWin) return;
+    }
     clearTimeout(notesPersistTimer.current);
     notesPersistTimer.current = window.setTimeout(() => {
       try {
@@ -1181,13 +1212,68 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     (serverId: string, pos?: { x: number; y: number }) => {
       if (isTauriRuntime) {
         const srv = serversRef.current.find((s) => s.id === serverId);
-        void invoke('open_floating_server_window', {
-          serverId,
-          title: srv?.name ?? null,
-          x: pos ? pos.x : null,
-          y: pos ? pos.y : null,
-          backdrop: settingsRef.current.settingsBackdrop ?? 'acrylic',
-        }).catch((err) => console.error('Failed to open native floating server window:', err));
+        let savedGeo: { x: number; y: number; width: number; height: number } | null = null;
+        try {
+          const raw = localStorage.getItem('di_server_window_positions');
+          if (raw) {
+            const map = JSON.parse(raw) as Record<
+              string,
+              { x: number; y: number; width: number; height: number }
+            >;
+            savedGeo = map[serverId] ?? null;
+          }
+        } catch {}
+
+        const vw = typeof window !== 'undefined' ? window.innerWidth : 1280;
+        const vh = typeof window !== 'undefined' ? window.innerHeight : 800;
+        const targetW = savedGeo ? savedGeo.width : DEFAULT_FLOATING_SERVER_WIDTH;
+        const targetH = savedGeo ? savedGeo.height : DEFAULT_FLOATING_SERVER_HEIGHT;
+        const targetX = pos
+          ? pos.x
+          : savedGeo
+            ? savedGeo.x
+            : Math.max(16, Math.round((vw - targetW) / 2));
+        const targetY = pos
+          ? pos.y
+          : savedGeo
+            ? savedGeo.y
+            : Math.max(88, Math.round((vh - targetH) / 2));
+        const backdrop = settingsRef.current.settingsBackdrop ?? 'acrylic';
+        const rect = { x: targetX, y: targetY, w: targetW, h: targetH };
+        const canGenie =
+          !settingsRef.current.reducedMotionEnabled && isRectOnPrimaryMonitor(rect);
+
+        const openRealServer = () => {
+          void invoke('open_floating_server_window', {
+            serverId,
+            title: srv?.name ?? null,
+            x: targetX,
+            y: targetY,
+            width: targetW,
+            height: targetH,
+            backdrop,
+            initiallyHidden: false,
+          }).catch((err) => console.error('Failed to open native floating server window:', err));
+        };
+
+        if (canGenie) {
+          let opened = false;
+          const triggerOpen = () => {
+            if (opened) return;
+            opened = true;
+            openRealServer();
+          };
+          void playFloatingServerGenie(
+            srv,
+            serverId,
+            'open',
+            rect,
+            settingsRef.current,
+            triggerOpen
+          ).finally(triggerOpen);
+        } else {
+          openRealServer();
+        }
       }
 
       setFloatingServers((prev) => {
@@ -1320,28 +1406,52 @@ export const IslandProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           }
         );
         const u2 = await listen<string>('dock-server-focus', () => {
-          setActiveTab('servers');
-          setState('expanded');
+          // Do not force-expand the island on dock so it doesn't get stuck open.
         });
         const u3 = await listen<{ noteId: string; focusMain: boolean }>(
           'floating-note-closed',
           (event) => {
-            const { noteId, focusMain } = event.payload;
+            const { noteId } = event.payload;
             setNotes((prev) =>
               prev.map((n) => (n.id === noteId ? { ...n, minimized: true } : n))
             );
-            if (focusMain) {
-              setActiveTab('todo');
-              setState('expanded');
-            }
           }
         );
+        const u4 = await listen<{
+          id: string;
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+        }>('floating-note-geometry', (event) => {
+          const { id, x, y, width, height } = event.payload;
+          setNotes((prev) =>
+            prev.map((n) => (n.id === id ? { ...n, x, y, width, height } : n))
+          );
+        });
+        const u5 = await listen<{
+          id: string;
+          x: number;
+          y: number;
+          width: number;
+          height: number;
+        }>('floating-server-geometry', (event) => {
+          const { id, x, y, width, height } = event.payload;
+          try {
+            const raw = localStorage.getItem('di_server_window_positions');
+            const map = raw ? JSON.parse(raw) : {};
+            map[id] = { x, y, width, height };
+            localStorage.setItem('di_server_window_positions', JSON.stringify(map));
+          } catch {}
+        });
         if (cancelled) {
           u1();
           u2();
           u3();
+          u4();
+          u5();
         } else {
-          unlisteners.push(u1, u2, u3);
+          unlisteners.push(u1, u2, u3, u4, u5);
         }
       })
       .catch(() => {});

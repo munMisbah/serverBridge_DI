@@ -12,6 +12,7 @@ import { ListOrderedIcon } from '@solar-icons/react/bold/list-ordered';
 import { ArrowUp } from 'lucide-react';
 import { useIsland } from '../../context/IslandContext';
 import { NOTE_COLORS, NOTE_THEME } from '../../utils/notes';
+import { resolveGlassSurfaceStyle } from '../../utils/glassTheme';
 import {
   applyNoteFormat,
   applyPlainBlock,
@@ -72,6 +73,7 @@ export const NativeFloatingNoteWindow: React.FC<NativeFloatingNoteWindowProps> =
   const [inDockZone, setInDockZone] = useState(false);
   const [isDocking, setIsDocking] = useState(false);
   const [marks, setMarks] = useState({
+
     bold: false,
     italic: false,
     heading: false,
@@ -85,12 +87,21 @@ export const NativeFloatingNoteWindow: React.FC<NativeFloatingNoteWindowProps> =
   const lastSaved = useRef(note?.content ?? '');
 
   const isDarkGlass = (settings.noteStyle ?? 'classic') === 'dark-glass';
+  const activeBackdrop = settings.settingsBackdrop ?? 'acrylic';
 
-  // Ensure backdrop matches noteStyle right after window mounts or changes
+  // Apply backdrop ONLY to this window once mounted/updated (never broadcast to other notes)
   useEffect(() => {
     if (!isTauri) return;
-    void invoke('set_floating_notes_style', { darkGlass: isDarkGlass }).catch(() => {});
-  }, [isTauri, isDarkGlass]);
+    const raf = requestAnimationFrame(() => {
+      void invoke('apply_floating_window_backdrop', {
+        kind: 'note',
+        id: noteId,
+        darkGlass: isDarkGlass,
+        backdrop: activeBackdrop,
+      }).catch(() => {});
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [isTauri, noteId, isDarkGlass, activeBackdrop]);
 
   // Listen for live dock-zone highlight & Genie suck-up trigger when dragged near the Dynamic Island
   useEffect(() => {
@@ -262,10 +273,6 @@ export const NativeFloatingNoteWindow: React.FC<NativeFloatingNoteWindowProps> =
     setInDockZone(false);
     setIsDocking(true);
     if (isTauri) {
-      if (isDarkGlass) {
-        void invoke('set_floating_notes_style', { darkGlass: false }).catch(() => {});
-      }
-      await new Promise((r) => window.setTimeout(r, 210));
       await invoke('close_floating_note_window', { noteId, focusMain: true }).catch(() => {});
     }
   };
@@ -273,7 +280,11 @@ export const NativeFloatingNoteWindow: React.FC<NativeFloatingNoteWindowProps> =
   const handleDelete = async () => {
     deleteNote(noteId);
     if (isTauri) {
-      await invoke('close_floating_note_window', { noteId, focusMain: false }).catch(() => {});
+      await invoke('close_floating_note_window', {
+        noteId,
+        focusMain: false,
+        animateGenie: false,
+      }).catch(() => {});
     }
   };
 
@@ -300,43 +311,23 @@ export const NativeFloatingNoteWindow: React.FC<NativeFloatingNoteWindowProps> =
   const bodyTextColor = isDarkGlass ? 'rgba(255,255,255,0.92)' : theme.text;
   const mutedColor = isDarkGlass ? 'rgba(255,255,255,0.48)' : theme.muted;
 
+  const glassStyle = isDarkGlass
+    ? resolveGlassSurfaceStyle(activeBackdrop, settings.glassTheme, 'note')
+    : {
+        backgroundColor: theme.bg,
+        color: theme.text,
+      };
+
   return (
     <motion.div
-      initial={{ opacity: 0, scaleX: 0.58, scaleY: 0.38, y: -24 }}
-      animate={
-        isDocking
-          ? {
-              opacity: 0,
-              scaleX: 0.16,
-              scaleY: 0.06,
-              y: -48,
-              borderRadius: '28px',
-            }
-          : {
-              opacity: inDockZone ? 0.85 : 1,
-              scaleX: inDockZone ? 0.95 : 1,
-              scaleY: inDockZone ? 0.95 : 1,
-              y: 0,
-              borderRadius: '0px',
-            }
-      }
-      transition={
-        isDocking
-          ? { duration: 0.2, ease: [0.4, 0, 0.2, 1] }
-          : { type: 'spring', stiffness: 420, damping: 28, mass: 0.7 }
-      }
-      style={
-        isDarkGlass
-          ? isDocking
-            ? { backgroundColor: 'rgba(14, 16, 22, 0.92)' }
-            : undefined
-          : {
-              backgroundColor: theme.bg,
-              color: theme.text,
-            }
-      }
+      animate={{
+        opacity: inDockZone ? 0.85 : 1,
+        scale: inDockZone ? 0.95 : 1,
+      }}
+      transition={{ type: 'spring', stiffness: 420, damping: 28 }}
+      style={glassStyle}
       className={`relative flex h-screen w-screen origin-top flex-col overflow-hidden select-none ${
-        isDarkGlass ? 'bg-transparent text-white' : ''
+        isDarkGlass ? 'text-white' : ''
       } ${inDockZone ? 'ring-2 ring-inset ring-sky-400/75' : ''}`}
     >
       {/* Live Dock Indicator Pill */}

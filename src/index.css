@@ -60,6 +60,53 @@
   background: rgba(255, 255, 255, 0.3);
 }
 
+/* Native Floating Window Genie Unfold & Suck-Up Animations (pure CSS GPU compositor) */
+@keyframes genie-unfold {
+  0% {
+    opacity: 0;
+    transform: translateY(-28px) scale(0.86);
+    clip-path: polygon(36% 0%, 64% 0%, 72% 18%, 28% 18%);
+  }
+  55% {
+    opacity: 1;
+    transform: translateY(2px) scale(1.01);
+    clip-path: polygon(6% 0%, 94% 0%, 100% 92%, 0% 92%);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%);
+  }
+}
+
+@keyframes genie-suck-up {
+  0% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    clip-path: polygon(0% 0%, 100% 0%, 100% 100%, 0% 100%);
+  }
+  45% {
+    opacity: 0.96;
+    transform: translateY(-14px) scale(0.92);
+    clip-path: polygon(26% 0%, 74% 0%, 94% 66%, 6% 66%);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-48px) scale(0.75);
+    clip-path: polygon(45% 0%, 55% 0%, 56% 3%, 44% 3%);
+  }
+}
+
+.animate-genie-in {
+  animation: genie-unfold 280ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  will-change: transform, clip-path, opacity;
+}
+
+.animate-genie-out {
+  animation: genie-suck-up 360ms cubic-bezier(0.36, 0, 0.2, 1) forwards;
+  will-change: transform, clip-path, opacity;
+}
+
 /* Solar Bold Rounded Icons default adjustments */
 svg.solar {
   display: inline-block;

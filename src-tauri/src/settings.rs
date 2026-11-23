@@ -1,7 +1,15 @@
+use std::sync::OnceLock;
 use tauri::{
-    window::{Effect, EffectsBuilder},
-    Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+    window::Color, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
+
+/// Serialize WebView2 window creation so concurrent calls (e.g. Expand All)
+/// never collide inside CoreWebView2Environment and leave a window with an
+/// opaque white swapchain.
+fn window_create_lock() -> &'static tokio::sync::Mutex<()> {
+    static LOCK: OnceLock<tokio::sync::Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| tokio::sync::Mutex::new(()))
+}
 
 /// Size of the settings window, mirrored in the CSS breakpoints.
 const SETTINGS_WIDTH: f64 = 520.0;
@@ -44,58 +52,6 @@ pub fn ensure_settings_window(app: &tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-#[cfg(target_os = "windows")]
-fn set_swca_acrylic(hwnd_raw: isize, enabled: bool, abgr_color: u32) {
-    use std::ffi::c_void;
-    use windows::core::s;
-    use windows::Win32::Foundation::HWND;
-    use windows::Win32::System::LibraryLoader::{GetModuleHandleA, GetProcAddress};
-
-    #[repr(C)]
-    struct AccentPolicy {
-        accent_state: u32,
-        accent_flags: u32,
-        gradient_color: u32,
-        animation_id: u32,
-    }
-
-    #[repr(C)]
-    struct WindowCompositionAttribData {
-        attrib: u32,
-        pv_data: *mut c_void,
-        cb_data: usize,
-    }
-
-    type SetWindowCompositionAttributeFn =
-        unsafe extern "system" fn(HWND, *mut WindowCompositionAttribData) -> i32;
-
-    unsafe {
-        let Ok(user32) = GetModuleHandleA(s!("user32.dll")) else {
-            return;
-        };
-        let Some(proc_addr) = GetProcAddress(user32, s!("SetWindowCompositionAttribute")) else {
-            return;
-        };
-        let func: SetWindowCompositionAttributeFn = std::mem::transmute(proc_addr);
-
-        let mut policy = AccentPolicy {
-            // 4 = ACCENT_ENABLE_ACRYLICBLURBEHIND, 0 = ACCENT_DISABLED
-            accent_state: if enabled { 4 } else { 0 },
-            accent_flags: if enabled { 2 } else { 0 },
-            gradient_color: if enabled { abgr_color } else { 0 },
-            animation_id: 0,
-        };
-
-        let mut data = WindowCompositionAttribData {
-            attrib: 19, // WCA_ACCENT_POLICY
-            pv_data: &mut policy as *mut AccentPolicy as *mut c_void,
-            cb_data: std::mem::size_of::<AccentPolicy>(),
-        };
-
-        let _ = func(HWND(hwnd_raw as *mut c_void), &mut data);
-    }
-}
-
 fn apply_windows_corners(win: &tauri::WebviewWindow) -> Result<(), String> {
     #[cfg(target_os = "windows")]
     {
@@ -103,18 +59,26 @@ fn apply_windows_corners(win: &tauri::WebviewWindow) -> Result<(), String> {
         use std::mem::size_of;
         use windows::Win32::Foundation::HWND;
         use windows::Win32::Graphics::Dwm::{
-            DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE, DWMWA_WINDOW_CORNER_PREFERENCE,
-            DWMWCP_ROUND, DWM_WINDOW_CORNER_PREFERENCE,
+            DwmExtendFrameIntoClientArea, DwmSetWindowAttribute, DWMWA_USE_IMMERSIVE_DARK_MODE,
+            DWMWA_WINDOW_CORNER_PREFERENCE, DWMWCP_ROUND, DWM_WINDOW_CORNER_PREFERENCE,
         };
+        use windows::Win32::UI::Controls::MARGINS;
 
         let raw_hwnd = win
             .hwnd()
-            .map_err(|e| format!("Failed to get settings HWND: {}", e))?;
+            .map_err(|e| format!("Failed to get window HWND: {}", e))?;
         let hwnd = HWND(raw_hwnd.0 as *mut c_void);
         let dark_mode: i32 = 1;
         let corner_pref = DWMWCP_ROUND;
+        let margins = MARGINS {
+            cxLeftWidth: -1,
+            cxRightWidth: -1,
+            cyTopHeight: -1,
+            cyBottomHeight: -1,
+        };
 
         unsafe {
+            let _ = DwmExtendFrameIntoClientArea(hwnd, &margins);
             let _ = DwmSetWindowAttribute(
                 hwnd,
                 DWMWA_USE_IMMERSIVE_DARK_MODE,
@@ -137,63 +101,200 @@ fn apply_windows_corners(win: &tauri::WebviewWindow) -> Result<(), String> {
     }
 }
 
-/// Apply native Windows 11 DWM backdrop material:
-/// - "acrylic": Real translucent frosted blur behind the window via SWCA (custom ~42% dark tint)
-/// - "mica": Native Windows 11 MicaDark (wallpaper-tinted)
-/// - "tabbed": Native Windows 11 Mica Alt (TabbedDark)
-/// - "solid": No native backdrop
+/// Apply official Windows 11 DWM System Backdrop (`DWMWA_SYSTEMBACKDROP_TYPE`) synchronously.
+/// Using official `DWMSBT_TRANSIENTWINDOW` (3) instead of legacy Win10 SWCA avoids Windows 11's
+/// multi-window white-out compositor bug when stacking multiple Floating Notes/Servers.
 pub fn apply_windows_backdrop(win: &tauri::WebviewWindow, backdrop: &str) -> Result<(), String> {
     let _ = apply_windows_corners(win);
 
     #[cfg(target_os = "windows")]
-    let raw_hwnd = win.hwnd().map(|h| h.0 as isize).ok();
+    {
+        use std::ffi::c_void;
+        use std::mem::size_of;
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::Graphics::Dwm::{
+            DwmSetWindowAttribute, DWMWA_SYSTEMBACKDROP_TYPE, DWMSBT_MAINWINDOW, DWMSBT_NONE,
+            DWMSBT_TABBEDWINDOW, DWMSBT_TRANSIENTWINDOW, DWM_SYSTEMBACKDROP_TYPE,
+        };
 
-    match backdrop.trim().to_ascii_lowercase().as_str() {
-        "acrylic" => {
-            // Clear DWM system backdrop first so SWCA translucent acrylic takes over cleanly.
-            let _ = win.set_effects(None);
-            #[cfg(target_os = "windows")]
-            if let Some(hwnd) = raw_hwnd {
-                // ABGR: Alpha 0x68 (~41%), B=0x16, G=0x12, R=0x10 -> crisp translucent dark glass
-                set_swca_acrylic(hwnd, true, 0x68161210);
-            }
-            Ok(())
+        let raw_hwnd = win
+            .hwnd()
+            .map_err(|e| format!("Failed to get window HWND: {}", e))?;
+        let hwnd = HWND(raw_hwnd.0 as *mut c_void);
+
+        let backdrop_type = match backdrop.trim().to_ascii_lowercase().as_str() {
+            "acrylic" | "slate" => DWMSBT_TRANSIENTWINDOW,
+            "tabbed" => DWMSBT_TABBEDWINDOW,
+            "solid" | "none" => DWMSBT_NONE,
+            _ => DWMSBT_MAINWINDOW, // "mica"
+        };
+
+        if backdrop_type != DWMSBT_NONE {
+            let _ = win.set_background_color(Some(Color(0, 0, 0, 0)));
         }
-        "tabbed" => {
-            #[cfg(target_os = "windows")]
-            if let Some(hwnd) = raw_hwnd {
-                set_swca_acrylic(hwnd, false, 0);
-            }
-            win.set_effects(Some(EffectsBuilder::new().effect(Effect::TabbedDark).build()))
-                .map_err(|e| format!("Failed to apply Tabbed backdrop: {}", e))
+
+        unsafe {
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_SYSTEMBACKDROP_TYPE,
+                &backdrop_type as *const DWM_SYSTEMBACKDROP_TYPE as *const c_void,
+                size_of::<DWM_SYSTEMBACKDROP_TYPE>() as u32,
+            );
         }
-        "solid" | "none" => {
-            #[cfg(target_os = "windows")]
-            if let Some(hwnd) = raw_hwnd {
-                set_swca_acrylic(hwnd, false, 0);
-            }
-            win.set_effects(None)
-                .map_err(|e| format!("Failed to clear backdrop: {}", e))
-        }
-        _ => {
-            #[cfg(target_os = "windows")]
-            if let Some(hwnd) = raw_hwnd {
-                set_swca_acrylic(hwnd, false, 0);
-            }
-            win.set_effects(Some(EffectsBuilder::new().effect(Effect::MicaDark).build()))
-                .map_err(|e| format!("Failed to apply Mica backdrop: {}", e))
-        }
+        Ok(())
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        let _ = (win, backdrop);
+        Ok(())
+    }
+}
+
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FloatingGenieEvent {
+    kind: String,
+    id: String,
+    direction: String,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+}
+
+/// Returns the window's logical rect relative to the primary monitor's work area,
+/// or `None` if the window is completely outside the primary monitor (e.g. Monitor 2).
+fn window_rect_relative_to_primary(w: &tauri::WebviewWindow) -> Option<(f64, f64, f64, f64)> {
+    let (Ok(pos), Ok(size), Ok(Some(primary))) =
+        (w.outer_position(), w.inner_size(), w.primary_monitor())
+    else {
+        return None;
+    };
+    let work = primary.work_area();
+    let p_scale = primary.scale_factor();
+    let w_scale = w.scale_factor().unwrap_or(p_scale);
+
+    let rel_x = ((pos.x - work.position.x) as f64 / p_scale).round();
+    let rel_y = ((pos.y - work.position.y) as f64 / p_scale).round();
+    let log_w = (size.width as f64 / w_scale).round();
+    let log_h = (size.height as f64 / w_scale).round();
+    let work_w = work.size.width as f64 / p_scale;
+    let work_h = work.size.height as f64 / p_scale;
+
+    if rel_x + log_w > 0.0 && rel_x < work_w && rel_y + log_h > 0.0 && rel_y < work_h {
+        Some((rel_x, rel_y, log_w, log_h))
+    } else {
+        None
+    }
+}
+
+fn emit_minimize_genie_if_primary(
+    app: &tauri::AppHandle,
+    win: &tauri::WebviewWindow,
+    kind: &str,
+    id: &str,
+) -> bool {
+    if let Some((x, y, width, height)) = window_rect_relative_to_primary(win) {
+        let _ = app.emit_to(
+            "main",
+            "play-floating-genie",
+            FloatingGenieEvent {
+                kind: kind.to_string(),
+                id: id.to_string(),
+                direction: "minimize".to_string(),
+                x,
+                y,
+                width,
+                height,
+            },
+        );
+        true
+    } else {
+        false
     }
 }
 
 #[tauri::command]
-pub fn set_settings_backdrop(app: tauri::AppHandle, backdrop: String) -> Result<(), String> {
+pub fn show_floating_window(
+    app: tauri::AppHandle,
+    kind: String,
+    id: String,
+    dark_glass: Option<bool>,
+    backdrop: Option<String>,
+) -> Result<(), String> {
+    let label = if kind == "server" {
+        server_window_label(&id)
+    } else {
+        note_window_label(&id)
+    };
+    if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.unminimize();
+        let _ = win.show();
+        let _ = win.set_focus();
+        let chosen = if kind == "server" || dark_glass.unwrap_or(false) {
+            backdrop.as_deref().unwrap_or("acrylic").to_string()
+        } else {
+            "solid".to_string()
+        };
+        let _ = apply_windows_backdrop(&win, &chosen);
+
+        // Re-apply SWCA/DWM backdrop once WebView2 finishes its first visible composite frame
+        // (prevents Windows 11 from dropping Acrylic on newly-shown batch windows during Expand All).
+        let app_clone = app.clone();
+        let label_clone = label.clone();
+        let chosen_clone = chosen;
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(160)).await;
+            if let Some(w) = app_clone.get_webview_window(&label_clone) {
+                if w.is_visible().unwrap_or(false) {
+                    let _ = apply_windows_backdrop(&w, &chosen_clone);
+                }
+            }
+        });
+    }
+    Ok(())
+}
+
+/// Apply backdrop to a single floating window once its WebView2 content has mounted.
+#[tauri::command]
+pub fn apply_floating_window_backdrop(
+    app: tauri::AppHandle,
+    kind: String,
+    id: String,
+    dark_glass: Option<bool>,
+    backdrop: Option<String>,
+) -> Result<(), String> {
+    let label = if kind == "server" {
+        server_window_label(&id)
+    } else {
+        note_window_label(&id)
+    };
+    if let Some(win) = app.get_webview_window(&label) {
+        if win.is_visible().unwrap_or(false) {
+            let chosen = if kind == "server" || dark_glass.unwrap_or(false) {
+                backdrop.as_deref().unwrap_or("acrylic")
+            } else {
+                "solid"
+            };
+            let _ = apply_windows_backdrop(&win, chosen);
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn set_settings_backdrop(
+    app: tauri::AppHandle,
+    backdrop: String,
+    apply_to_notes: Option<bool>,
+) -> Result<(), String> {
     if let Some(win) = app.get_webview_window("settings") {
         let _ = apply_windows_backdrop(&win, &backdrop);
     }
-    // Also sync backdrop to any open native floating server windows.
+    // Sync backdrop to open floating server windows and (when dark-glass is active) floating note windows.
+    let sync_notes = apply_to_notes.unwrap_or(false);
     for (label, win) in app.webview_windows() {
-        if label.starts_with("srv-") {
+        if label.starts_with("srv-") || (sync_notes && label.starts_with("note-")) {
             let _ = apply_windows_backdrop(&win, &backdrop);
         }
     }
@@ -237,6 +338,33 @@ fn is_window_in_dock_zone(w: &tauri::WebviewWindow) -> bool {
     dist_from_top <= 28.0 && dist_from_center <= 220.0
 }
 
+#[derive(Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct FloatingWindowGeometryEvent {
+    id: String,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
+}
+
+fn emit_window_geometry(app: &tauri::AppHandle, event_name: &str, id: &str, w: &tauri::WebviewWindow) {
+    let (Ok(pos), Ok(size)) = (w.outer_position(), w.inner_size()) else {
+        return;
+    };
+    let scale = w.scale_factor().unwrap_or(1.0);
+    let _ = app.emit(
+        event_name,
+        FloatingWindowGeometryEvent {
+            id: id.to_string(),
+            x: (pos.x as f64 / scale).round(),
+            y: (pos.y as f64 / scale).round(),
+            width: (size.width as f64 / scale).round(),
+            height: (size.height as f64 / scale).round(),
+        },
+    );
+}
+
 #[tauri::command]
 pub async fn open_floating_server_window(
     app: tauri::AppHandle,
@@ -244,13 +372,19 @@ pub async fn open_floating_server_window(
     title: Option<String>,
     x: Option<f64>,
     y: Option<f64>,
+    width: Option<f64>,
+    height: Option<f64>,
     backdrop: Option<String>,
+    initially_hidden: Option<bool>,
 ) -> Result<(), String> {
+    let _guard = window_create_lock().lock().await;
     let label = server_window_label(&server_id);
     if let Some(win) = app.get_webview_window(&label) {
-        let _ = win.unminimize();
-        let _ = win.show();
-        let _ = win.set_focus();
+        if !initially_hidden.unwrap_or(false) {
+            let _ = win.unminimize();
+            let _ = win.show();
+            let _ = win.set_focus();
+        }
         let _ = app.emit(
             "floating-server-state",
             FloatingServerEvent {
@@ -269,12 +403,13 @@ pub async fn open_floating_server_window(
 
     let mut builder = WebviewWindowBuilder::new(&app, &label, WebviewUrl::App(url.into()))
         .title(&win_title)
-        .inner_size(430.0, 320.0)
+        .inner_size(width.unwrap_or(430.0).max(340.0), height.unwrap_or(320.0).max(240.0))
         .min_inner_size(340.0, 240.0)
         .resizable(true)
         .maximizable(false)
         .decorations(false)
         .transparent(true)
+        .background_color(Color(0, 0, 0, 0))
         .always_on_top(true)
         .skip_taskbar(true)
         .shadow(true)
@@ -290,10 +425,13 @@ pub async fn open_floating_server_window(
         .build()
         .map_err(|e| format!("Failed to create floating server window: {}", e))?;
 
-    let _ = win.show();
-    let _ = win.set_focus();
-    let chosen_backdrop = backdrop.as_deref().unwrap_or("acrylic");
-    let _ = apply_windows_backdrop(&win, chosen_backdrop);
+    let _ = apply_windows_corners(&win);
+    if !initially_hidden.unwrap_or(false) {
+        let _ = win.show();
+        let _ = win.set_focus();
+        let chosen_backdrop = backdrop.as_deref().unwrap_or("acrylic");
+        let _ = apply_windows_backdrop(&win, chosen_backdrop);
+    }
 
     let app_clone = app.clone();
     let sid_clone = server_id.clone();
@@ -371,7 +509,7 @@ pub async fn open_floating_server_window(
                     return;
                 };
 
-                // If dropped at the top-center Dynamic Island dock zone, trigger Genie suck-up animation then close!
+                // If dropped at the top-center Dynamic Island dock zone, trigger cross-screen Genie in main overlay and hide immediately!
                 if is_window_in_dock_zone(&w) {
                     dock_ref.store(false, std::sync::atomic::Ordering::SeqCst);
                     let _ = app_inner.emit(
@@ -381,9 +519,8 @@ pub async fn open_floating_server_window(
                             active: false,
                         },
                     );
-                    let _ = apply_windows_backdrop(&w, "solid");
-                    let _ = app_inner.emit("floating-server-docking", sid_inner.clone());
-                    tokio::time::sleep(std::time::Duration::from_millis(220)).await;
+                    let animated = emit_minimize_genie_if_primary(&app_inner, &w, "server", &sid_inner);
+                    let _ = w.hide();
                     let _ = w.close();
                     let _ = app_inner.emit(
                         "floating-server-state",
@@ -392,9 +529,18 @@ pub async fn open_floating_server_window(
                             floating: false,
                         },
                     );
-                    let _ = app_inner.emit("dock-server-focus", sid_inner);
+                    if !animated {
+                        let _ = app_inner.emit("island-dock-pulse", sid_inner);
+                    }
+                } else {
+                    emit_window_geometry(&app_inner, "floating-server-geometry", &sid_inner, &w);
                 }
             });
+        }
+        WindowEvent::Resized(_) => {
+            if let Some(w) = app_clone.get_webview_window(&label_clone) {
+                emit_window_geometry(&app_clone, "floating-server-geometry", &sid_clone, &w);
+            }
         }
         _ => {}
     });
@@ -414,9 +560,15 @@ pub async fn close_floating_server_window(
     app: tauri::AppHandle,
     server_id: String,
     focus_main: Option<bool>,
+    animate_genie: Option<bool>,
 ) -> Result<(), String> {
     let label = server_window_label(&server_id);
+    let mut animated = false;
     if let Some(win) = app.get_webview_window(&label) {
+        if animate_genie.unwrap_or(true) {
+            animated = emit_minimize_genie_if_primary(&app, &win, "server", &server_id);
+        }
+        let _ = win.hide();
         let _ = win.close();
     }
     let _ = app.emit(
@@ -426,8 +578,8 @@ pub async fn close_floating_server_window(
             floating: false,
         },
     );
-    if focus_main.unwrap_or(false) {
-        let _ = app.emit("dock-server-focus", server_id);
+    if focus_main.unwrap_or(false) && !animated {
+        let _ = app.emit("island-dock-pulse", server_id);
     }
     Ok(())
 }
@@ -477,12 +629,17 @@ pub async fn open_floating_note_window(
     x: Option<f64>,
     y: Option<f64>,
     dark_glass: Option<bool>,
+    backdrop: Option<String>,
+    initially_hidden: Option<bool>,
 ) -> Result<(), String> {
+    let _guard = window_create_lock().lock().await;
     let label = note_window_label(&note_id);
     if let Some(win) = app.get_webview_window(&label) {
-        let _ = win.unminimize();
-        let _ = win.show();
-        let _ = win.set_focus();
+        if !initially_hidden.unwrap_or(false) {
+            let _ = win.unminimize();
+            let _ = win.show();
+            let _ = win.set_focus();
+        }
         return Ok(());
     }
 
@@ -498,17 +655,14 @@ pub async fn open_floating_note_window(
         .maximizable(false)
         .decorations(false)
         .transparent(true)
+        .background_color(Color(0, 0, 0, 0))
         .always_on_top(true)
         .skip_taskbar(true)
         .shadow(true)
         .visible(false);
 
     if let (Some(px), Some(py)) = (x, y) {
-        if px >= 0.0 && py >= 0.0 {
-            builder = builder.position(px, py);
-        } else {
-            builder = builder.center();
-        }
+        builder = builder.position(px, py);
     } else {
         builder = builder.center();
     }
@@ -517,10 +671,19 @@ pub async fn open_floating_note_window(
         .build()
         .map_err(|e| format!("Failed to create floating note window: {}", e))?;
 
-    let _ = win.show();
-    let _ = win.set_focus();
-    let backdrop = if dark_glass.unwrap_or(false) { "acrylic" } else { "solid" };
-    let _ = apply_windows_backdrop(&win, backdrop);
+    let _ = apply_windows_corners(&win);
+    if !initially_hidden.unwrap_or(false) {
+        let _ = win.show();
+        let _ = win.set_focus();
+        let chosen_backdrop = if dark_glass.unwrap_or(false) {
+            backdrop.as_deref().unwrap_or("acrylic")
+        } else {
+            "solid"
+        };
+        let _ = apply_windows_backdrop(&win, chosen_backdrop);
+        // Brief settle before next queued WebView2 window builds during Expand All
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
 
     let app_clone = app.clone();
     let nid_clone = note_id.clone();
@@ -607,19 +770,28 @@ pub async fn open_floating_note_window(
                             active: false,
                         },
                     );
-                    let _ = apply_windows_backdrop(&w, "solid");
-                    let _ = app_inner.emit("floating-note-docking", nid_inner.clone());
-                    tokio::time::sleep(std::time::Duration::from_millis(220)).await;
+                    let animated = emit_minimize_genie_if_primary(&app_inner, &w, "note", &nid_inner);
+                    let _ = w.hide();
                     let _ = w.close();
                     let _ = app_inner.emit(
                         "floating-note-closed",
                         FloatingNoteClosedEvent {
-                            note_id: nid_inner,
-                            focus_main: true,
+                            note_id: nid_inner.clone(),
+                            focus_main: false,
                         },
                     );
+                    if !animated {
+                        let _ = app_inner.emit("island-dock-pulse", nid_inner);
+                    }
+                } else {
+                    emit_window_geometry(&app_inner, "floating-note-geometry", &nid_inner, &w);
                 }
             });
+        }
+        WindowEvent::Resized(_) => {
+            if let Some(w) = app_clone.get_webview_window(&label_clone) {
+                emit_window_geometry(&app_clone, "floating-note-geometry", &nid_clone, &w);
+            }
         }
         _ => {}
     });
@@ -632,28 +804,65 @@ pub async fn close_floating_note_window(
     app: tauri::AppHandle,
     note_id: String,
     focus_main: Option<bool>,
+    animate_genie: Option<bool>,
 ) -> Result<(), String> {
     let label = note_window_label(&note_id);
+    let mut animated = false;
     if let Some(win) = app.get_webview_window(&label) {
+        if animate_genie.unwrap_or(true) {
+            animated = emit_minimize_genie_if_primary(&app, &win, "note", &note_id);
+        }
+        let _ = win.hide();
         let _ = win.close();
     }
     let _ = app.emit(
         "floating-note-closed",
         FloatingNoteClosedEvent {
-            note_id,
+            note_id: note_id.clone(),
             focus_main: focus_main.unwrap_or(false),
         },
     );
+    if focus_main.unwrap_or(false) && !animated {
+        let _ = app.emit("island-dock-pulse", note_id);
+    }
     Ok(())
 }
 
 #[tauri::command]
-pub fn set_floating_notes_style(app: tauri::AppHandle, dark_glass: bool) -> Result<(), String> {
-    let backdrop = if dark_glass { "acrylic" } else { "solid" };
+pub fn set_floating_notes_style(
+    app: tauri::AppHandle,
+    dark_glass: bool,
+    backdrop: Option<String>,
+) -> Result<(), String> {
+    let chosen = if dark_glass {
+        backdrop.as_deref().unwrap_or("acrylic")
+    } else {
+        "solid"
+    };
     for (label, win) in app.webview_windows() {
         if label.starts_with("note-") {
-            let _ = apply_windows_backdrop(&win, backdrop);
+            let _ = apply_windows_backdrop(&win, chosen);
         }
+    }
+    Ok(())
+}
+
+/// Clear backdrop + native shadow on a single floating window right before its
+/// Genie suck-up animation starts so no static Acrylic rectangle lingers behind.
+#[tauri::command]
+pub fn clear_floating_window_backdrop(
+    app: tauri::AppHandle,
+    kind: String,
+    id: String,
+) -> Result<(), String> {
+    let label = if kind == "server" {
+        server_window_label(&id)
+    } else {
+        note_window_label(&id)
+    };
+    if let Some(win) = app.get_webview_window(&label) {
+        let _ = win.set_shadow(false);
+        let _ = apply_windows_backdrop(&win, "solid");
     }
     Ok(())
 }
