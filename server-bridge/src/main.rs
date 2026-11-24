@@ -25,6 +25,8 @@ pub struct DockerContainerInfo {
     pub image: String,
     pub state: String,
     pub status: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub ports: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub cpu_percent: Option<f64>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -468,6 +470,16 @@ async fn read_docker_containers(
     let body = &response_bytes[body_start..];
 
     #[derive(Deserialize)]
+    struct RawDockerPort {
+        #[serde(rename = "PrivatePort")]
+        private_port: Option<u16>,
+        #[serde(rename = "PublicPort")]
+        public_port: Option<u16>,
+        #[serde(rename = "Type")]
+        port_type: Option<String>,
+    }
+
+    #[derive(Deserialize)]
     struct RawDockerContainer {
         #[serde(rename = "Id")]
         id: Option<String>,
@@ -479,6 +491,8 @@ async fn read_docker_containers(
         state: Option<String>,
         #[serde(rename = "Status")]
         status: Option<String>,
+        #[serde(rename = "Ports")]
+        ports: Option<Vec<RawDockerPort>>,
     }
 
     let Ok(raw_list): Result<Vec<RawDockerContainer>, _> = serde_json::from_slice(body) else {
@@ -496,6 +510,34 @@ async fn read_docker_containers(
         let name = raw_name.trim_start_matches('/').to_string();
         let state = c.state.unwrap_or_else(|| "unknown".into());
 
+        let mut ports: Vec<String> = Vec::new();
+        if let Some(raw_ports) = c.ports {
+            for p in raw_ports {
+                let Some(priv_p) = p.private_port else { continue };
+                let proto = p.port_type.as_deref().unwrap_or("tcp");
+                let label = if let Some(pub_p) = p.public_port {
+                    if pub_p == priv_p {
+                        if proto == "tcp" {
+                            format!("{pub_p}")
+                        } else {
+                            format!("{pub_p}/{proto}")
+                        }
+                    } else if proto == "tcp" {
+                        format!("{pub_p}->{priv_p}")
+                    } else {
+                        format!("{pub_p}->{priv_p}/{proto}")
+                    }
+                } else if proto == "tcp" {
+                    format!("{priv_p}")
+                } else {
+                    format!("{priv_p}/{proto}")
+                };
+                if !ports.contains(&label) {
+                    ports.push(label);
+                }
+            }
+        }
+
         let (cpu, ram) = if state == "running" && !full_id.is_empty() {
             read_single_container_metrics(paths, sock_path, &full_id, tracker).await
         } else {
@@ -508,6 +550,7 @@ async fn read_docker_containers(
             image: c.image.unwrap_or_default(),
             state,
             status: c.status.unwrap_or_default(),
+            ports,
             cpu_percent: cpu,
             ram_used_bytes: ram,
         });
